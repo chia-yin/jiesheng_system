@@ -6,3 +6,12 @@
 
 [build.environment]
   NODE_VERSION = "22"
+
+# 打卡提醒排程（由 Netlify Cron Job 定時呼叫 API Route）
+# 需在 Netlify Dashboard → Site Configuration → Cron jobs 設定：
+#   上班提醒（08:30 台北 = UTC 00:30 平日）:
+#     schedule: 30 0 * * 1-5
+#     URL: https://jiesheng-system.netlify.app/api/cron/clock-reminder?kind=in&secret=CRON_SECRET
+#   下班提醒（18:15 台北 = UTC 10:15 平日）:
+#     schedule: 15 10 * * 1-5
+#     URL: https://jiesheng-system.netlify.app/api/cron/clock-reminder?kind=out&secret=CRON_SECRET

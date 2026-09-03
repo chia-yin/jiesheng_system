@@ -354,6 +354,60 @@ export async function getTodaySummary(date = new Date().toISOString().slice(0, 1
   };
 }
 
+/**
+ * 補卡：管理員或本人插入指定日期+時間的打卡紀錄
+ * date: YYYY-MM-DD  time: HH:MM
+ */
+export async function makeupClock(
+  employeeId: string,
+  type: ClockType,
+  date: string,
+  time: string,
+  requesterId: string,
+  requesterRole: "admin" | "employee"
+) {
+  const store = await getStore();
+  const employee = store.employees.find((e) => e.id === employeeId);
+  if (!employee) throw new Error("找不到員工");
+  if (requesterRole !== "admin" && requesterId !== employeeId) {
+    throw new Error("僅管理員可替他人補卡");
+  }
+
+  const settings = getWorkSettings(store.workSettings);
+  // 組台北時區的 ISO 時間字串
+  const timestamp = new Date(`${date}T${time}:00+08:00`).toISOString();
+
+  const { clockIn, clockOut } = getDayRecords(store.records, employeeId, date);
+  if (type === "in" && clockIn) throw new Error(`${date} 已有上班打卡（${clockIn.timestamp.slice(11, 16)} UTC）`);
+  if (type === "out" && clockOut) throw new Error(`${date} 已有下班打卡`);
+  if (type === "out" && !clockIn) throw new Error(`${date} 尚無上班打卡，請先補上班`);
+
+  const record: AttendanceRecord = {
+    id: newId("rec"),
+    employeeId: employee.id,
+    employeeName: employee.name,
+    type,
+    timestamp,
+    note: "補卡",
+  };
+
+  if (type === "in") {
+    record.lateMinutes = calcLateMinutes(timestamp, settings);
+  } else {
+    record.earlyLeaveMinutes = calcEarlyLeaveMinutes(timestamp, settings);
+  }
+
+  store.records.unshift(record);
+  await saveStore(store);
+
+  const workMinutes =
+    type === "out" && clockIn
+      ? calcWorkMinutes(clockIn.timestamp, timestamp, settings.breakMinutes)
+      : 0;
+
+  return { record, lateMinutes: record.lateMinutes ?? 0, earlyLeaveMinutes: record.earlyLeaveMinutes ?? 0, workMinutes, settings };
+}
+
 /** 撤銷今日最後一筆下班打卡（誤按保護） */
 export async function undoClockOut(employeeId: string) {
   const store = await getStore();

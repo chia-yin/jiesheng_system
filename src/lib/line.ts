@@ -1,6 +1,6 @@
 import { createHmac } from "crypto";
 import { linkLineRichMenu, unlinkLineRichMenu } from "@/lib/line-rich-menu";
-import { clockInOut } from "@/lib/attendance";
+import { clockInOut, makeupClock } from "@/lib/attendance";
 import { getStore, saveStore } from "@/lib/db";
 import {
   buildClockResultFlex,
@@ -96,9 +96,26 @@ export async function pushLineMessages(lineUserId: string, messages: LineMessage
   await postLineMessages(LINE_PUSH_URL, { to: lineUserId, messages: list });
 }
 
+function formatTaipeiDateTime(iso: string): string {
+  const d = new Date(iso);
+  const date = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  const time = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).format(d);
+  return `${date} ${time}`;
+}
+
 function formatClockLines(type: "in" | "out", result: Awaited<ReturnType<typeof clockInOut>>): string[] {
-  const time = new Date(result.record.timestamp).toLocaleString("zh-TW", { hour12: false });
-  const lines = [`時間：${time}`];
+  const lines = [`時間：${formatTaipeiDateTime(result.record.timestamp)}`];
   if (type === "in" && result.lateMinutes > 0) {
     lines.push(`遲到 ${result.lateMinutes} 分鐘`);
   }
@@ -141,9 +158,22 @@ async function handleBind(lineUserId: string, code: string): Promise<LineMessage
   return buildWelcomeFlex(target.name, true);
 }
 
+function formatTaipeiTime(iso: string): string {
+  return new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
+}
+
+function getTaipeiToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+}
+
 async function handleStatus(employee: Employee): Promise<LineMessage> {
   const store = await getStore();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTaipeiToday();
   const { clockIn, clockOut } = getDayRecords(store.records, employee.id, today);
   const settings = getWorkSettings(store.workSettings);
 
@@ -154,11 +184,7 @@ async function handleStatus(employee: Employee): Promise<LineMessage> {
     };
   }
 
-  const inTime = new Date(clockIn.timestamp).toLocaleTimeString("zh-TW", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  const inTime = formatTaipeiTime(clockIn.timestamp);
   if (!clockOut) {
     return {
       type: "text",
@@ -166,11 +192,7 @@ async function handleStatus(employee: Employee): Promise<LineMessage> {
     };
   }
 
-  const outTime = new Date(clockOut.timestamp).toLocaleTimeString("zh-TW", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+  const outTime = formatTaipeiTime(clockOut.timestamp);
   return {
     type: "text",
     text: `${employee.name} 今日狀態\n上班：${inTime}\n下班：${outTime}`,
@@ -183,6 +205,56 @@ async function handleClock(employee: Employee, type: "in" | "out"): Promise<Line
     return buildClockResultFlex(type, formatClockLines(type, result), employee.name);
   } catch (err) {
     return { type: "text", text: err instanceof Error ? err.message : "打卡失敗" };
+  }
+}
+
+/**
+ * 解析補卡指令，例如：
+ *   「補上班 09:05」      → today, in, 09:05
+ *   「補下班 18:30」      → today, out, 18:30
+ *   「補上班 09:05 2026-09-02」 → 2026-09-02, in, 09:05
+ */
+function parseMakeupCommand(cmd: string): { type: "in" | "out"; time: string; date: string } | null {
+  // 支援 補上班/補下班
+  const match = cmd.match(/^補(上班|下班)\s+(\d{2}:\d{2})(?:\s+(\d{4}-\d{2}-\d{2}))?$/);
+  if (!match) return null;
+  const type = match[1] === "上班" ? "in" : "out";
+  const time = match[2];
+  const date = match[3] ?? getTaipeiToday();
+  return { type, time, date };
+}
+
+async function handleMakeup(employee: Employee, cmd: string): Promise<LineMessage> {
+  const parsed = parseMakeupCommand(cmd);
+  if (!parsed) {
+    return {
+      type: "text",
+      text: "補卡格式：\n補上班 09:05\n補下班 18:30\n補上班 09:05 2026-09-01（指定日期）",
+    };
+  }
+  try {
+    const result = await makeupClock(
+      employee.id,
+      parsed.type,
+      parsed.date,
+      parsed.time,
+      employee.id,
+      employee.role as "admin" | "employee"
+    );
+    const label = parsed.type === "in" ? "上班" : "下班";
+    const lines = [
+      `日期：${parsed.date}`,
+      `時間：${formatTaipeiDateTime(result.record.timestamp)}`,
+      `補卡類型：${label}`,
+    ];
+    if (parsed.type === "in" && result.lateMinutes > 0) lines.push(`遲到 ${result.lateMinutes} 分鐘`);
+    if (parsed.type === "out" && result.earlyLeaveMinutes > 0) lines.push(`早退 ${result.earlyLeaveMinutes} 分鐘`);
+    if (parsed.type === "out" && result.workMinutes > 0) {
+      lines.push(`工時 ${Math.floor(result.workMinutes / 60)} 小時 ${result.workMinutes % 60} 分`);
+    }
+    return buildClockResultFlex(parsed.type, lines, employee.name);
+  } catch (err) {
+    return { type: "text", text: err instanceof Error ? err.message : "補卡失敗" };
   }
 }
 
@@ -222,6 +294,11 @@ export async function handleLineWebhookEvents(events: LineWebhookEvent[]): Promi
       continue;
     }
 
+    if (cmd.startsWith("補上班") || cmd.startsWith("補下班")) {
+      await replyLine(event.replyToken, await handleMakeup(employee, cmd));
+      continue;
+    }
+
     if (cmd === "狀態" || cmd === "status") {
       await replyLine(event.replyToken, await handleStatus(employee));
       continue;
@@ -234,7 +311,7 @@ export async function handleLineWebhookEvents(events: LineWebhookEvent[]): Promi
 
     await replyLine(event.replyToken, {
       type: "text",
-      text: "不認識的指令。請輸入：上班、下班、狀態、說明",
+      text: "不認識的指令。\n可用指令：\n上班 / 下班 / 狀態\n補上班 HH:MM\n補下班 HH:MM\n補上班 HH:MM YYYY-MM-DD",
     });
   }
 }
