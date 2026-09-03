@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight,
   Check,
-  FolderOpen,
   Plus,
   Rocket,
   User,
@@ -17,10 +15,10 @@ import { Pagination } from "@/components/Pagination";
 import {
   labelOf,
   PROJECT_PATH_PRESETS,
+  PROJECT_STATUS_BORDER,
   PROJECT_STATUS_CHIP,
   PROJECT_STATUS_OPTIONS,
 } from "@/lib/project-ui";
-import { formatSprintWeekLabel } from "@/lib/sprint-utils";
 import { useListPipeline, type SortOrder } from "@/lib/list-utils";
 import type { SessionUser } from "@/types/auth";
 import type { Employee } from "@/types/attendance";
@@ -282,6 +280,7 @@ export default function ProjectsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setMessage("");
 
@@ -377,95 +376,92 @@ export default function ProjectsPage() {
           onSortChange={setSortOrder}
         />
 
-        <div className="overflow-hidden rounded-xl border border-[var(--line)]">
-          {pagedProjects.length ? (
-            <ul className="divide-y divide-[var(--line)]">
-              {pagedProjects.map((proj) => {
-                const sprint = proj.summary?.activeSprint;
-                const sprintTotal = proj.summary?.sprintTaskTotal ?? 0;
-                const sprintDone = proj.summary?.sprintTaskDone ?? 0;
-                const memberCount = proj.memberIds?.length ?? 0;
-                const done = proj.summary?.taskDone ?? 0;
-                const total = proj.summary?.taskTotal ?? 0;
+        {pagedProjects.length ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {pagedProjects.map((proj) => {
+              const sprint = proj.summary?.activeSprint;
+              const sprintTotal = proj.summary?.sprintTaskTotal ?? 0;
+              const sprintDone = proj.summary?.sprintTaskDone ?? 0;
+              const memberCount = proj.memberIds?.length ?? 0;
+              const done = proj.summary?.taskDone ?? 0;
+              const total = proj.summary?.taskTotal ?? 0;
 
-                return (
-                  <li key={proj.id}>
-                    <Link
-                      href={`/projects/${proj.id}`}
-                      className="group flex flex-col gap-3 px-4 py-3.5 transition hover:bg-blue-50/40 sm:flex-row sm:items-center sm:gap-4"
-                    >
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate font-semibold group-hover:text-[var(--primary)]">
-                            {proj.name}
-                          </p>
-                          <span className={PROJECT_STATUS_CHIP[proj.status]}>
-                            {labelOf(PROJECT_STATUS_OPTIONS, proj.status)}
-                          </span>
-                          {sprint && sprintTotal > 0 && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                              <Rocket className="h-3 w-3" />
-                              本週 {sprintDone}/{sprintTotal}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
-                          {proj.managerName && (
-                            <span className="inline-flex items-center gap-1">
-                              <User className="h-3 w-3" />
-                              {proj.managerName}
-                            </span>
-                          )}
-                          {memberCount > 0 && (
-                            <span className="inline-flex items-center gap-1">
-                              <Users className="h-3 w-3" />
-                              {memberCount} 人
-                            </span>
-                          )}
-                          {sprint && sprintTotal === 0 && (
-                            <span className="inline-flex items-center gap-1 text-[var(--faint)]">
-                              <Rocket className="h-3 w-3" />
-                              本週尚未納入任務
-                            </span>
-                          )}
-                          {(proj.paths?.length ?? 0) > 0 && (
-                            <span
-                              className="inline-flex items-center gap-1 text-[var(--faint)]"
-                              title={proj.paths!.map((p) => `${p.label}: ${p.url}`).join("\n")}
-                            >
-                              <FolderOpen className="h-3 w-3 shrink-0" />
-                              {proj.paths!.slice(0, 3).map((p) => p.label).join(" · ")}
-                              {proj.paths!.length > 3 ? ` +${proj.paths!.length - 3}` : ""}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+              return (
+                <Link
+                  key={proj.id}
+                  href={`/projects/${proj.id}`}
+                  className={`group flex flex-col rounded-xl border border-[var(--line)] border-l-4 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-[var(--primary)]/40 hover:shadow-md ${PROJECT_STATUS_BORDER[proj.status]}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 flex-1 truncate font-semibold group-hover:text-[var(--primary)]">
+                      {proj.name}
+                    </p>
+                    <span className={`shrink-0 ${PROJECT_STATUS_CHIP[proj.status]}`}>
+                      {labelOf(PROJECT_STATUS_OPTIONS, proj.status)}
+                    </span>
+                  </div>
 
-                      <div className="flex shrink-0 flex-col items-end gap-1 sm:w-48">
-                        <ProgressMini done={done} total={total} />
-                        {sprint && sprintTotal > 0 && (
-                          <p className="text-[10px] text-blue-600">
-                            本週 {formatSprintWeekLabel(sprint.startDate, sprint.endDate)}
-                          </p>
-                        )}
-                      </div>
-                      <ArrowRight className="hidden h-4 w-4 shrink-0 text-[var(--faint)] opacity-0 transition group-hover:opacity-100 group-hover:text-[var(--primary)] sm:block" />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="px-4 py-10 text-center text-sm text-[var(--muted)]">
-              {mineOnly
-                ? "目前沒有你負責或參與的專案"
-                : month
-                  ? "此月份沒有專案"
-                  : "尚無專案"}
-              {isAdmin && !month && !mineOnly && "，請建立第一個專案"}
-            </p>
-          )}
-        </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted)]">
+                    {proj.managerName && (
+                      <span className="inline-flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        {proj.managerName}
+                      </span>
+                    )}
+                    {memberCount > 0 && (
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="h-3 w-3" />
+                        {memberCount} 人
+                      </span>
+                    )}
+                  </div>
+
+                  {(proj.paths?.length ?? 0) > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {proj.paths!.slice(0, 3).map((p) => (
+                        <span
+                          key={`${p.label}-${p.url}`}
+                          className="rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] text-[var(--faint)]"
+                        >
+                          {p.label}
+                        </span>
+                      ))}
+                      {proj.paths!.length > 3 && (
+                        <span className="rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] text-[var(--faint)]">
+                          +{proj.paths!.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mt-auto space-y-2 pt-3">
+                    {sprint && sprintTotal > 0 ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                        <Rocket className="h-3 w-3" />
+                        本週 {sprintDone}/{sprintTotal}
+                      </span>
+                    ) : sprint ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-[var(--faint)]">
+                        <Rocket className="h-3 w-3" />
+                        本週尚未納入任務
+                      </span>
+                    ) : null}
+                    <ProgressMini done={done} total={total} />
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="rounded-xl border border-dashed border-[var(--line)] px-4 py-10 text-center text-sm text-[var(--muted)]">
+            {mineOnly
+              ? "目前沒有你負責或參與的專案"
+              : month
+                ? "此月份沒有專案"
+                : "尚無專案"}
+            {isAdmin && !month && !mineOnly && "，請建立第一個專案"}
+          </p>
+        )}
 
         {totalCount > 0 && (
           <Pagination page={safePage} totalPages={totalPages} onPageChange={setPage} />
@@ -489,7 +485,7 @@ export default function ProjectsPage() {
                 disabled={loading}
                 className="btn-primary disabled:opacity-50"
               >
-                建立專案
+                {loading ? "建立中…" : "建立專案"}
               </button>
             </>
           }

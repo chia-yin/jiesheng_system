@@ -107,6 +107,7 @@ export default function SprintsPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (creating) return;
     setCreating(true);
     try {
       const res = await fetch("/api/sprints", {

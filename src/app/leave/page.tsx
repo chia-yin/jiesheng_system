@@ -194,6 +194,7 @@ export default function LeavePage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setMessage("");
 
@@ -553,7 +554,7 @@ export default function LeavePage() {
               取消
             </button>
             <button type="submit" form="leave-form" disabled={loading} className="btn-primary disabled:opacity-50">
-              送出申請
+              {loading ? "送出中…" : "送出申請"}
             </button>
           </>
         }

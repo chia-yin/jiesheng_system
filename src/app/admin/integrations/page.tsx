@@ -48,6 +48,7 @@ export default function AdminIntegrationsPage() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     setSaving(true);
     setError("");
     setMessage("");
@@ -165,7 +166,7 @@ export default function AdminIntegrationsPage() {
           </p>
         )}
 
-        <button type="submit" className="btn-primary" disabled={saving}>
+        <button type="submit" className="btn-primary disabled:opacity-50" disabled={saving}>
           {saving ? "儲存中…" : "儲存設定"}
         </button>
       </form>

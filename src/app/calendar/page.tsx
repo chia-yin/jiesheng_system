@@ -63,6 +63,18 @@ const TYPE_CONFIG: Record<
     legend: "cal-legend-chip bg-blue-50 text-blue-700 border-blue-200/60",
     dot: "bg-blue-500",
   },
+  company_event: {
+    label: EVENT_TYPE_LABEL.company_event,
+    chip: "bg-pink-50 text-pink-700 border-pink-200/60",
+    legend: "cal-legend-chip bg-pink-50 text-pink-700 border-pink-200/60",
+    dot: "bg-pink-500",
+  },
+  milestone: {
+    label: EVENT_TYPE_LABEL.milestone,
+    chip: "bg-rose-50 text-rose-700 border-rose-200/60",
+    legend: "cal-legend-chip bg-rose-50 text-rose-700 border-rose-200/60",
+    dot: "bg-rose-500",
+  },
   training: {
     label: EVENT_TYPE_LABEL.training,
     chip: "bg-cyan-50 text-cyan-700 border-cyan-200/60",
@@ -99,8 +111,8 @@ const LEGEND_TYPES: CalendarEventType[] = [
   "leave",
   "meeting_external",
   "meeting_internal",
-  "training",
-  "trip",
+  "company_event",
+  "milestone",
   "project",
   "sprint",
   "other",
@@ -485,6 +497,7 @@ function CalendarPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setMessage("");
 
@@ -530,6 +543,7 @@ function CalendarPage() {
   }
 
   async function handleManualSync() {
+    if (syncing) return;
     setSyncing(true);
     try {
       const res = await fetch("/api/calendar/sync", { method: "POST" });
@@ -585,7 +599,7 @@ function CalendarPage() {
           ))}
         </select>
         <p className="mt-1 text-xs text-[var(--faint)]">
-          例行對外／對內、訓練、出差會同步公司 Google；「其他」僅系統內顯示。
+          帶 [] 的類型會同步公司 Google；「其他」僅系統內顯示。
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -1004,7 +1018,7 @@ function CalendarPage() {
       >
         <div className="space-y-4 text-sm leading-relaxed">
           <p className="text-[var(--muted)]">
-            訂閱後，已核准請假、例行會議／訓練／出差與專案里程碑會出現在日曆；「其他」私人記事不會匯出。
+            訂閱後，休假、會議、公司活動、里程碑與專案會出現在日曆；「其他」私人記事不會匯出。
           </p>
 
           <div className="cal-detail-card space-y-2">

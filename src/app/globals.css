@@ -425,6 +425,8 @@ body {
   .cal-event-item--meeting_external { border-left-color: #6366f1; }
   .cal-event-item--meeting_internal { border-left-color: #3b82f6; }
   .cal-event-item--meeting { border-left-color: #3b82f6; }
+  .cal-event-item--company_event { border-left-color: #ec4899; }
+  .cal-event-item--milestone { border-left-color: #f43f5e; }
   .cal-event-item--training { border-left-color: #06b6d4; }
   .cal-event-item--trip { border-left-color: #f97316; }
   .cal-event-item--project { border-left-color: #f59e0b; }
@@ -499,6 +501,8 @@ body {
   .cal-event-detail--meeting_external { border-left-color: #6366f1; }
   .cal-event-detail--meeting_internal { border-left-color: #3b82f6; }
   .cal-event-detail--meeting { border-left-color: #3b82f6; }
+  .cal-event-detail--company_event { border-left-color: #ec4899; }
+  .cal-event-detail--milestone { border-left-color: #f43f5e; }
   .cal-event-detail--training { border-left-color: #06b6d4; }
   .cal-event-detail--trip { border-left-color: #f97316; }
   .cal-event-detail--project { border-left-color: #f59e0b; }

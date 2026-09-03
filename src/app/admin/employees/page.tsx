@@ -67,6 +67,7 @@ export default function AdminEmployeesPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setMessage("");
 

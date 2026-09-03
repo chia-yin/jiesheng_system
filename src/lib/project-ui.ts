@@ -15,11 +15,16 @@ export const PROJECT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] =
 ];
 
 export const PROJECT_STATUS_CHIP: Record<ProjectStatus, string> = {
-  planning: "chip-planning",
-  active: "chip-info",
-  on_hold: "chip-pending",
-  completed: "chip-approved",
-  archived: "chip-muted",
+  planning:
+    "inline-flex items-center rounded-full border border-amber-200/80 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800",
+  active:
+    "inline-flex items-center rounded-full border border-blue-200/80 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700",
+  on_hold:
+    "inline-flex items-center rounded-full border border-orange-200/80 bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-800",
+  completed:
+    "inline-flex items-center rounded-full border border-emerald-200/80 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700",
+  archived:
+    "inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600",
 };
 
 export const PROJECT_STATUS_BORDER: Record<ProjectStatus, string> = {

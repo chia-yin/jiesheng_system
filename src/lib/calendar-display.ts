@@ -88,9 +88,9 @@ function chipPriority(type: CalendarEventType): number {
     case "meeting_external":
     case "meeting_internal":
     case "meeting":
+    case "company_event":
       return 0;
-    case "training":
-    case "trip":
+    case "milestone":
       return 1;
     case "project":
       return 2;

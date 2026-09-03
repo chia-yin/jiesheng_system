@@ -112,6 +112,8 @@ export type CalendarEventType =
   | "meeting_external"
   | "meeting_internal"
   | "meeting"
+  | "company_event"
+  | "milestone"
   | "training"
   | "trip"
   | "project"

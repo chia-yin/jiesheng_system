@@ -61,6 +61,7 @@ export default function AnnouncementsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setMessage("");
 
@@ -142,7 +143,7 @@ export default function AnnouncementsPage() {
               取消
             </button>
             <button type="submit" form="announcement-form" disabled={loading} className="btn-primary disabled:opacity-50">
-              發布
+              {loading ? "發布中…" : "發布"}
             </button>
           </>
         }

@@ -11,7 +11,6 @@ import {
   LayoutGrid,
   Link2,
   List,
-  ListTodo,
   Pencil,
   Plus,
   Rocket,
@@ -53,32 +52,6 @@ const TAB_ITEMS: { key: TabKey; label: string; icon: React.ComponentType<{ class
   { key: "kanban", label: "看板", icon: LayoutGrid },
   { key: "tasks", label: "任務列表", icon: List },
 ];
-
-function ProjectProgressBar({ done, total, label = "整體任務進度" }: { done: number; total: number; label?: string }) {
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  return (
-    <div className="space-y-2">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <p className="text-xs text-[var(--muted)]">{label}</p>
-          <p className="mt-0.5 text-2xl font-semibold tabular-nums">
-            {pct}
-            <span className="text-base font-normal text-[var(--muted)]">%</span>
-          </p>
-        </div>
-        <p className="text-sm text-[var(--muted)]">
-          {done} / {total} 完成
-        </p>
-      </div>
-      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-[var(--primary)] to-blue-400 transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
 
 function MemberPicker({
   employees,
@@ -207,7 +180,9 @@ export default function ProjectDetailPage() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [tab, setTab] = useState<TabKey>("overview");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
 
   const [taskModal, setTaskModal] = useState(false);
   const [projectModal, setProjectModal] = useState(false);
@@ -309,7 +284,9 @@ export default function ProjectDetailPage() {
 
   async function saveProject(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     setMessage("");
+    setSaving(true);
     try {
       const res = await fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
@@ -331,6 +308,8 @@ export default function ProjectDetailPage() {
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "儲存失敗");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -360,7 +339,9 @@ export default function ProjectDetailPage() {
 
   async function saveTask(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
     setMessage("");
+    setSaving(true);
     try {
       const body: Record<string, unknown> = {
         title: taskTitle,
@@ -391,16 +372,24 @@ export default function ProjectDetailPage() {
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "儲存失敗");
+    } finally {
+      setSaving(false);
     }
   }
 
   async function updateTaskStatus(task: Task, status: TaskStatus) {
-    const res = await fetch(`/api/projects/${projectId}/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) await load();
+    if (statusBusyId) return;
+    setStatusBusyId(task.id);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) await load();
+    } finally {
+      setStatusBusyId(null);
+    }
   }
 
   async function deleteTask(task: Task) {
@@ -431,7 +420,6 @@ export default function ProjectDetailPage() {
     : [];
   const sprintDone = sprintTasks.filter((t) => t.status === "done").length;
   const inProgressCount = tasks.filter((t) => t.status === "in_progress").length;
-  const backlogCount = tasks.filter((t) => !companySprint || t.sprintId !== companySprint.id).length;
 
   return (
     <>
@@ -533,174 +521,88 @@ export default function ProjectDetailPage() {
         </div>
 
         {tab === "overview" && (
-          <div className="space-y-5">
-            <div className="rounded-xl border border-[var(--line)] bg-slate-50/50 p-5">
-              <ProjectProgressBar done={summary.taskDone} total={summary.taskTotal} />
-            </div>
-
-            <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50/80 to-white p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="flex items-center gap-1.5 text-xs font-medium text-blue-700">
-                    <Rocket className="h-3.5 w-3.5" />
-                    本週 Sprint
-                  </p>
-                  {companySprint ? (
-                    <>
-                      <p className="mt-1 text-lg font-semibold text-blue-900">
-                        {formatSprintWeekLabel(companySprint.startDate, companySprint.endDate)}
-                      </p>
-                      {companySprint.goal && (
-                        <p className="mt-1 text-sm text-blue-700/80">{companySprint.goal}</p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="mt-1 text-sm text-blue-800/80">目前沒有進行中的公司 Sprint</p>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-blue-600">本專案本週任務</p>
-                  <p className="mt-0.5 text-xl font-semibold tabular-nums text-blue-900">
-                    {sprintDone}/{sprintTasks.length}
-                  </p>
-                </div>
-              </div>
-
-              {sprintTasks.length > 0 ? (
-                <>
-                  <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-blue-100">
-                    <div
-                      className="h-full rounded-full bg-blue-500 transition-all"
-                      style={{
-                        width: `${Math.round((sprintDone / sprintTasks.length) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                  <ul className="mt-4 space-y-2">
-                    {sprintTasks.slice(0, 8).map((task) => (
-                      <li
-                        key={task.id}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-white/80 px-3 py-2 text-sm"
-                      >
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[task.priority]}`} />
-                          <span className="truncate font-medium">{task.title}</span>
-                          {task.assigneeName && (
-                            <span className="hidden shrink-0 text-xs text-[var(--faint)] sm:inline">
-                              · {task.assigneeName}
-                            </span>
-                          )}
-                        </div>
-                        <span className={`shrink-0 ${TASK_STATUS_CHIP[task.status]}`}>
-                          {labelOf(TASK_STATUS_OPTIONS, task.status)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  {sprintTasks.length > 8 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFilterScope("sprint");
-                        setTab("tasks");
-                      }}
-                      className="mt-3 text-xs text-blue-700 hover:underline"
-                    >
-                      查看全部本週任務 →
-                    </button>
-                  )}
-                </>
-              ) : (
-                <p className="mt-3 text-sm text-blue-800/70">
-                  本專案尚未納入本週 Sprint。
-                  {isAdmin ? (
-                    <>
-                      {" "}
-                      到{" "}
-                      <Link href="/sprints" className="font-medium underline">
-                        本週 Sprint
-                      </Link>{" "}
-                      勾選任務，或新增任務時勾選「加入本週 Sprint」。
-                    </>
-                  ) : null}
-                </p>
-              )}
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-[var(--line)] bg-white p-4">
-                <p className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                  <Rocket className="h-3.5 w-3.5" />
-                  本週任務
-                </p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">{sprintTasks.length}</p>
-              </div>
-              <div className="rounded-xl border border-[var(--line)] bg-white p-4">
-                <p className="flex items-center gap-1.5 text-xs text-[var(--muted)]">
-                  <ListTodo className="h-3.5 w-3.5" />
-                  進行中
-                </p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">{inProgressCount}</p>
-              </div>
-              <div className="rounded-xl border border-[var(--line)] bg-white p-4">
-                <p className="text-xs text-[var(--muted)]">未排入本週</p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">{backlogCount}</p>
-              </div>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="rounded-lg border border-[var(--line)] bg-slate-50 px-3 py-1.5 tabular-nums">
+                進度{" "}
+                <strong>
+                  {summary.taskTotal
+                    ? Math.round((summary.taskDone / summary.taskTotal) * 100)
+                    : 0}
+                  %
+                </strong>
+                <span className="text-[var(--muted)]">
+                  {" "}
+                  · {summary.taskDone}/{summary.taskTotal}
+                </span>
+              </span>
+              <span className="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-1.5 text-blue-800 tabular-nums">
+                本週 {sprintDone}/{sprintTasks.length}
+              </span>
+              <span className="rounded-lg border border-[var(--line)] bg-white px-3 py-1.5 tabular-nums">
+                進行中 {inProgressCount}
+              </span>
+              {companySprint ? (
+                <Link href="/sprints" className="text-xs text-[var(--primary)] hover:underline">
+                  {formatSprintWeekLabel(companySprint.startDate, companySprint.endDate)} →
+                </Link>
+              ) : null}
             </div>
 
             <div>
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold">近期任務</h3>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">
+                  {sprintTasks.length ? "本週任務" : "任務"}
+                </h3>
                 <button
                   type="button"
                   onClick={() => setTab("tasks")}
                   className="text-xs text-[var(--primary)] hover:underline"
                 >
-                  查看全部 →
+                  全部 →
                 </button>
               </div>
-              <div className="space-y-2">
-                {tasks.slice(0, 6).map((task) => (
-                  <div
-                    key={task.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-sm transition hover:border-[var(--primary)]/40"
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[task.priority]}`} />
-                      <span className="truncate font-medium">{task.title}</span>
-                      {isThisSprint(task) && (
-                        <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
-                          本週
-                        </span>
-                      )}
-                      {task.assigneeName && (
-                        <span className="hidden shrink-0 text-xs text-[var(--faint)] sm:inline">
-                          · {task.assigneeName}
-                        </span>
-                      )}
-                    </div>
-                    <span className={`shrink-0 ${TASK_STATUS_CHIP[task.status]}`}>
-                      {labelOf(TASK_STATUS_OPTIONS, task.status)}
-                    </span>
-                  </div>
-                ))}
-                {!tasks.length && <p className="text-sm text-[var(--muted)]">尚無任務</p>}
-              </div>
-            </div>
 
-            <div className="flex flex-wrap gap-2 border-t border-[var(--line)] pt-4">
-              <button type="button" onClick={() => setTab("kanban")} className="btn-secondary gap-1.5 text-xs">
-                <LayoutGrid className="h-3.5 w-3.5" />
-                查看看板
-              </button>
-              <Link href="/sprints" className="btn-secondary gap-1.5 text-xs">
-                <Rocket className="h-3.5 w-3.5" />
-                本週 Sprint
-              </Link>
-              <Link href="/calendar" className="btn-secondary gap-1.5 text-xs">
-                <Calendar className="h-3.5 w-3.5" />
-                行事曆
-              </Link>
+              {(sprintTasks.length ? sprintTasks : tasks).length ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(sprintTasks.length ? sprintTasks : tasks).slice(0, 6).map((task) => (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => {
+                        if (isAdmin || canEditTask(task)) openTaskModal(task);
+                        else setTab("tasks");
+                      }}
+                      className="rounded-xl border border-[var(--line)] bg-white p-3 text-left transition hover:border-[var(--primary)]/40 hover:shadow-sm"
+                    >
+                      <div className="flex items-start gap-2">
+                        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[task.priority]}`} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{task.title}</p>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <span className={TASK_STATUS_CHIP[task.status]}>
+                              {labelOf(TASK_STATUS_OPTIONS, task.status)}
+                            </span>
+                            {isThisSprint(task) && (
+                              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                                本週
+                              </span>
+                            )}
+                            {task.assigneeName && (
+                              <span className="text-[11px] text-[var(--faint)]">{task.assigneeName}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-xl border border-dashed border-[var(--line)] px-4 py-8 text-center text-sm text-[var(--muted)]">
+                  尚無任務
+                  {isAdmin ? "，右上可新增" : ""}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -763,8 +665,9 @@ export default function ProjectDetailPage() {
                           {canEditTask(task) && (
                             <select
                               value={task.status}
+                              disabled={statusBusyId === task.id}
                               onChange={(e) => updateTaskStatus(task, e.target.value as TaskStatus)}
-                              className="input-field mt-2 py-1 text-xs"
+                              className="input-field mt-2 py-1 text-xs disabled:opacity-50"
                             >
                               {TASK_STATUS_OPTIONS.map((s) => (
                                 <option key={s.value} value={s.value}>
@@ -835,8 +738,9 @@ export default function ProjectDetailPage() {
                         {canEditTask(task) ? (
                           <select
                             value={task.status}
+                            disabled={statusBusyId === task.id}
                             onChange={(e) => updateTaskStatus(task, e.target.value as TaskStatus)}
-                            className="input-field py-1 text-xs"
+                            className="input-field py-1 text-xs disabled:opacity-50"
                           >
                             {TASK_STATUS_OPTIONS.map((s) => (
                               <option key={s.value} value={s.value}>
@@ -900,16 +804,28 @@ export default function ProjectDetailPage() {
 
       <Modal
         open={projectModal}
-        onClose={() => setProjectModal(false)}
+        onClose={() => {
+          if (!saving) setProjectModal(false);
+        }}
         title="編輯專案"
         size="lg"
         footer={
           <>
-            <button type="button" onClick={() => setProjectModal(false)} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => setProjectModal(false)}
+              disabled={saving}
+              className="btn-secondary disabled:opacity-50"
+            >
               取消
             </button>
-            <button type="submit" form="project-edit-form" className="btn-primary">
-              儲存
+            <button
+              type="submit"
+              form="project-edit-form"
+              disabled={saving}
+              className="btn-primary disabled:opacity-50"
+            >
+              {saving ? "儲存中…" : "儲存"}
             </button>
           </>
         }
@@ -1005,16 +921,28 @@ export default function ProjectDetailPage() {
 
       <Modal
         open={taskModal}
-        onClose={() => setTaskModal(false)}
+        onClose={() => {
+          if (!saving) setTaskModal(false);
+        }}
         title={editingTask ? "編輯任務" : "新增任務"}
         size="lg"
         footer={
           <>
-            <button type="button" onClick={() => setTaskModal(false)} className="btn-secondary">
+            <button
+              type="button"
+              onClick={() => setTaskModal(false)}
+              disabled={saving}
+              className="btn-secondary disabled:opacity-50"
+            >
               取消
             </button>
-            <button type="submit" form="task-form" className="btn-primary">
-              儲存
+            <button
+              type="submit"
+              form="task-form"
+              disabled={saving}
+              className="btn-primary disabled:opacity-50"
+            >
+              {saving ? "儲存中…" : "儲存"}
             </button>
           </>
         }

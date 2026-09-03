@@ -1,4 +1,5 @@
 import { getStore, newId, saveStore } from "@/lib/db";
+import { formatLeaveTitle } from "@/lib/calendar-types";
 import { formatSprintDisplay } from "@/lib/project-ui";
 import type { CalendarEvent, CalendarEventType, AggregatedCalendarEvent } from "@/types/system";
 
@@ -58,7 +59,10 @@ export async function getAggregatedEvents(month?: string): Promise<AggregatedCal
     if (leave.status !== "approved") continue;
     events.push({
       id: `leave-${leave.id}`,
-      title: `${leave.employeeName} ${LEAVE_TYPE_LABEL[leave.type] ?? leave.type}`,
+      title: formatLeaveTitle(
+        leave.employeeName,
+        LEAVE_TYPE_LABEL[leave.type] ?? leave.type
+      ),
       type: "leave",
       startDate: leave.startDate,
       endDate: leave.endDate,
