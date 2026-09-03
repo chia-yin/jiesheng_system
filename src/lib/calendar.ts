@@ -188,7 +188,15 @@ export async function createCalendarEvent(input: {
   store.calendarEvents.unshift(event);
   await saveStore(store);
 
-  return event;
+  try {
+    const { syncCalendarEventToGoogle } = await import("@/lib/google-calendar");
+    await syncCalendarEventToGoogle(event);
+  } catch (error) {
+    console.error("[calendar] auto sync after create failed:", error);
+  }
+
+  const refreshed = (await getStore()).calendarEvents.find((e) => e.id === event.id);
+  return refreshed ?? event;
 }
 
 export async function updateCalendarEvent(
@@ -223,7 +231,16 @@ export async function updateCalendarEvent(
   }
 
   await saveStore(store);
-  return event;
+
+  try {
+    const { syncCalendarEventToGoogle } = await import("@/lib/google-calendar");
+    await syncCalendarEventToGoogle(event);
+  } catch (error) {
+    console.error("[calendar] auto sync after update failed:", error);
+  }
+
+  const refreshed = (await getStore()).calendarEvents.find((e) => e.id === id);
+  return refreshed ?? event;
 }
 
 export async function deleteCalendarEvent(id: string) {
@@ -265,6 +282,7 @@ export async function generateIcsContent(): Promise<string> {
   ];
 
   for (const event of events) {
+    if (event.type === "other") continue;
     const uid = `${event.id}@jiesheng-system`;
     const endDate = event.endDate ?? event.startDate;
     const isAllDay = !event.startTime;

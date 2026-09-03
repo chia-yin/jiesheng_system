@@ -31,6 +31,7 @@ import {
   sortDayEvents,
 } from "@/lib/calendar-display";
 import type { AggregatedCalendarEvent, CalendarEventType } from "@/types/system";
+import { CREATABLE_EVENT_TYPES, EVENT_TYPE_LABEL, isGoogleSyncableEventType } from "@/lib/calendar-types";
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
@@ -39,36 +40,72 @@ const TYPE_CONFIG: Record<
   { label: string; chip: string; legend: string; dot: string }
 > = {
   leave: {
-    label: "請假",
+    label: EVENT_TYPE_LABEL.leave,
     chip: "bg-emerald-50 text-emerald-700 border-emerald-200/60",
     legend: "cal-legend-chip bg-emerald-50 text-emerald-700 border-emerald-200/60",
     dot: "bg-emerald-500",
   },
-  meeting: {
-    label: "會議",
+  meeting_external: {
+    label: EVENT_TYPE_LABEL.meeting_external,
+    chip: "bg-indigo-50 text-indigo-700 border-indigo-200/60",
+    legend: "cal-legend-chip bg-indigo-50 text-indigo-700 border-indigo-200/60",
+    dot: "bg-indigo-500",
+  },
+  meeting_internal: {
+    label: EVENT_TYPE_LABEL.meeting_internal,
     chip: "bg-blue-50 text-blue-700 border-blue-200/60",
     legend: "cal-legend-chip bg-blue-50 text-blue-700 border-blue-200/60",
     dot: "bg-blue-500",
   },
+  meeting: {
+    label: EVENT_TYPE_LABEL.meeting,
+    chip: "bg-blue-50 text-blue-700 border-blue-200/60",
+    legend: "cal-legend-chip bg-blue-50 text-blue-700 border-blue-200/60",
+    dot: "bg-blue-500",
+  },
+  training: {
+    label: EVENT_TYPE_LABEL.training,
+    chip: "bg-cyan-50 text-cyan-700 border-cyan-200/60",
+    legend: "cal-legend-chip bg-cyan-50 text-cyan-700 border-cyan-200/60",
+    dot: "bg-cyan-500",
+  },
+  trip: {
+    label: EVENT_TYPE_LABEL.trip,
+    chip: "bg-orange-50 text-orange-700 border-orange-200/60",
+    legend: "cal-legend-chip bg-orange-50 text-orange-700 border-orange-200/60",
+    dot: "bg-orange-500",
+  },
   project: {
-    label: "專案",
+    label: EVENT_TYPE_LABEL.project,
     chip: "bg-amber-50 text-amber-700 border-amber-200/60",
     legend: "cal-legend-chip bg-amber-50 text-amber-700 border-amber-200/60",
     dot: "bg-amber-500",
   },
   sprint: {
-    label: "迭代",
+    label: EVENT_TYPE_LABEL.sprint,
     chip: "bg-violet-50 text-violet-700 border-violet-200/60",
     legend: "cal-legend-chip bg-violet-50 text-violet-700 border-violet-200/60",
     dot: "bg-violet-500",
   },
   other: {
-    label: "其他",
+    label: EVENT_TYPE_LABEL.other,
     chip: "bg-slate-50 text-slate-600 border-slate-200/60",
     legend: "cal-legend-chip bg-slate-50 text-slate-600 border-slate-200/60",
     dot: "bg-slate-400",
   },
 };
+
+const LEGEND_TYPES: CalendarEventType[] = [
+  "leave",
+  "meeting_external",
+  "meeting_internal",
+  "training",
+  "trip",
+  "project",
+  "sprint",
+  "other",
+];
+
 
 interface GoogleStatus {
   configured: boolean;
@@ -209,7 +246,8 @@ function CalendarEventDetail({ event }: { event: AggregatedCalendarEvent }) {
           <span className={`cal-event-type-dot ${config.dot}`} />
           {config.label}
         </span>
-        {event.source === "leave" && (
+        {(event.source === "leave" ||
+          (event.source === "stored" && isGoogleSyncableEventType(event.type))) && (
           <span
             className={`cal-event-sync-chip ${
               event.googleEventId ? "synced" : "pending"
@@ -217,6 +255,9 @@ function CalendarEventDetail({ event }: { event: AggregatedCalendarEvent }) {
           >
             {event.googleEventId ? "已同步 Google" : "尚未同步"}
           </span>
+        )}
+        {event.source === "stored" && event.type === "other" && (
+          <span className="cal-event-sync-chip pending">僅系統內</span>
         )}
       </div>
 
@@ -310,7 +351,7 @@ function CalendarPage() {
 
   const [form, setForm] = useState({
     title: "",
-    type: "meeting" as CalendarEventType,
+    type: "meeting_internal" as CalendarEventType,
     startDate: "",
     endDate: "",
     startTime: "",
@@ -404,7 +445,7 @@ function CalendarPage() {
     setSelectedEvent(null);
     setForm({
       title: "",
-      type: "meeting",
+      type: "meeting_internal",
       startDate: date ?? selectedDate,
       endDate: date ?? selectedDate,
       startTime: "09:00",
@@ -417,9 +458,11 @@ function CalendarPage() {
   function openEditForm(event: AggregatedCalendarEvent) {
     setEditingId(event.id);
     setSelectedEvent(event);
+    const editType =
+      event.type === "meeting" ? "meeting_internal" : event.type;
     setForm({
       title: event.title,
-      type: event.type,
+      type: CREATABLE_EVENT_TYPES.includes(editType) ? editType : "meeting_internal",
       startDate: event.startDate,
       endDate: event.endDate ?? event.startDate,
       startTime: event.startTime ?? "",
@@ -464,7 +507,7 @@ function CalendarPage() {
 
       closeModal();
       await loadEvents();
-      showToast(editingId ? "事件已更新" : "會議已新增");
+      showToast(editingId ? "事件已更新" : "事件已新增");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "儲存失敗");
     } finally {
@@ -493,9 +536,9 @@ function CalendarPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "同步失敗");
       if (data.errors?.length) {
-        showToast(`同步 ${data.synced} 筆；${data.errors.length} 筆失敗（請檢查 Google Calendar API）`);
+        showToast(`同步 ${data.synced} 筆；${data.errors.length} 筆失敗`);
       } else {
-        showToast(`已同步 ${data.synced} 筆請假至 Google 日曆`);
+        showToast(`已同步 ${data.synced} 筆至 Google 日曆（請假／會議等）`);
       }
       await loadEvents();
     } catch (error) {
@@ -534,9 +577,16 @@ function CalendarPage() {
           onChange={(e) => setForm({ ...form, type: e.target.value as CalendarEventType })}
           className="input-field"
         >
-          <option value="meeting">會議</option>
-          <option value="other">其他</option>
+          {CREATABLE_EVENT_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {EVENT_TYPE_LABEL[t]}
+              {t === "other" ? "（不同步 Google）" : ""}
+            </option>
+          ))}
         </select>
+        <p className="mt-1 text-xs text-[var(--faint)]">
+          例行對外／對內、訓練、出差會同步公司 Google；「其他」僅系統內顯示。
+        </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
@@ -657,20 +707,20 @@ function CalendarPage() {
               className="btn-secondary gap-1.5 px-3 py-2 text-xs disabled:opacity-50"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
-              同步請假
+              同步 Google
             </button>
           )}
 
           <button type="button" onClick={() => openCreateForm()} className="btn-primary gap-1.5 px-3 py-2 text-xs">
             <Plus className="h-3.5 w-3.5" />
-            新增會議
+            新增事件
           </button>
         </div>
       </section>
 
       {/* 圖例 */}
       <div className="flex flex-wrap items-center gap-2">
-        {(Object.keys(TYPE_CONFIG) as CalendarEventType[]).map((type) => (
+        {LEGEND_TYPES.map((type) => (
           <span key={type} className={TYPE_CONFIG[type].legend}>
             <span className={`h-2 w-2 rounded-full ${TYPE_CONFIG[type].dot}`} />
             {TYPE_CONFIG[type].label}
@@ -765,7 +815,7 @@ function CalendarPage() {
       <Modal
         open={modalMode === "create" || modalMode === "edit"}
         onClose={closeModal}
-        title={modalMode === "edit" ? "編輯事件" : "新增會議"}
+        title={modalMode === "edit" ? "編輯事件" : "新增事件"}
         footer={
           <>
             <button type="button" onClick={closeModal} className="btn-secondary">
@@ -827,7 +877,9 @@ function CalendarPage() {
                   <ExternalLink className="h-3.5 w-3.5" />
                 </Link>
               )}
-              {selectedEvent.source === "leave" ? (
+              {selectedEvent.source === "leave" ||
+              (selectedEvent.source === "stored" &&
+                isGoogleSyncableEventType(selectedEvent.type)) ? (
                 selectedEvent.googleEventId ? (
                   <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -845,9 +897,11 @@ function CalendarPage() {
                   </button>
                 ) : (
                   <span className="text-xs text-[var(--muted)]">
-                    請假核准後會由管理員同步至公司 Google 日曆
+                    由管理員同步至公司 Google 日曆
                   </span>
                 )
+              ) : selectedEvent.source === "stored" && selectedEvent.type === "other" ? (
+                <span className="text-xs text-[var(--muted)]">私人記事，不會同步到公司 Google 日曆</span>
               ) : (
                 <a
                   href={buildGoogleUrl(selectedEvent)}
@@ -864,10 +918,17 @@ function CalendarPage() {
             {selectedEvent.source !== "stored" && (
               <p className="cal-event-source">
                 {selectedEvent.source === "leave"
-                  ? "來源：請假系統（已核准）· 公司日曆同步與「加入個人日曆」不同"
+                  ? "來源：請假系統（已核准）"
                   : selectedEvent.source === "sprint"
                     ? "來源：本週 Sprint"
                     : "來源：專案管理"}
+              </p>
+            )}
+            {selectedEvent.source === "stored" && (
+              <p className="cal-event-source">
+                {selectedEvent.type === "other"
+                  ? "來源：手動新增 · 僅系統內顯示"
+                  : "來源：手動新增 · 可同步公司 Google 日曆"}
               </p>
             )}
           </div>
@@ -898,7 +959,7 @@ function CalendarPage() {
               className="btn-primary gap-1.5"
             >
               <Plus className="h-3.5 w-3.5" />
-              新增會議
+              新增事件
             </button>
           </>
         }
@@ -943,7 +1004,7 @@ function CalendarPage() {
       >
         <div className="space-y-4 text-sm leading-relaxed">
           <p className="text-[var(--muted)]">
-            訂閱後，已核准請假、會議與專案里程碑會自動同步到你的 Google 日曆，無需管理員 OAuth 設定。
+            訂閱後，已核准請假、例行會議／訓練／出差與專案里程碑會出現在日曆；「其他」私人記事不會匯出。
           </p>
 
           <div className="cal-detail-card space-y-2">

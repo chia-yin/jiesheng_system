@@ -1,5 +1,6 @@
 import { getStore, saveStore } from "@/lib/db";
-import type { GoogleTokens, LeaveRequest } from "@/types/system";
+import { isGoogleSyncableEventType, EVENT_TYPE_LABEL } from "@/lib/calendar-types";
+import type { CalendarEvent, GoogleTokens, LeaveRequest } from "@/types/system";
 
 const LEAVE_TYPE_LABEL: Record<string, string> = {
   annual: "特休",
@@ -96,27 +97,72 @@ function addDays(dateStr: string, days: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-export function buildLeaveEventPayload(leave: LeaveRequest) {
-  const typeLabel = LEAVE_TYPE_LABEL[leave.type] ?? leave.type;
-  const summary = `${leave.employeeName} ${typeLabel}`;
-  const endExclusive = addDays(leave.endDate, 1);
+async function resolveCalendarId(): Promise<string> {
+  const store = await getStore();
+  const tokens = await getGoogleTokens();
+  return (
+    store.integrationSettings?.googleCalendarId ??
+    tokens?.calendarId ??
+    "primary"
+  );
+}
 
+type GoogleEventPayload = {
+  summary: string;
+  description?: string;
+  start: { date?: string; dateTime?: string; timeZone?: string };
+  end: { date?: string; dateTime?: string; timeZone?: string };
+  colorId?: string;
+};
+
+export function buildLeaveEventPayload(leave: LeaveRequest): GoogleEventPayload {
+  const typeLabel = LEAVE_TYPE_LABEL[leave.type] ?? leave.type;
   return {
-    summary,
+    summary: `${leave.employeeName} ${typeLabel}`,
     description: leave.reason || `請假申請（${leave.days} 天）`,
     start: { date: leave.startDate },
-    end: { date: endExclusive },
+    end: { date: addDays(leave.endDate, 1) },
     colorId: "2",
   };
 }
 
-export async function createGoogleCalendarEvent(
-  leave: LeaveRequest,
-  accessToken: string,
-  calendarId = "primary"
-): Promise<string> {
-  const payload = buildLeaveEventPayload(leave);
+export function buildCalendarEventPayload(event: CalendarEvent): GoogleEventPayload {
+  const typeLabel = EVENT_TYPE_LABEL[event.type] ?? event.type;
+  const summary =
+    event.type === "meeting"
+      ? event.title
+      : `[${typeLabel}] ${event.title}`;
 
+  const description = [typeLabel, event.description].filter(Boolean).join("\n");
+  const timeZone = "Asia/Taipei";
+
+  if (event.startTime) {
+    const endTime = event.endTime || event.startTime;
+    const endDate = event.endDate ?? event.startDate;
+    return {
+      summary,
+      description,
+      start: { dateTime: `${event.startDate}T${event.startTime}:00`, timeZone },
+      end: { dateTime: `${endDate}T${endTime}:00`, timeZone },
+      colorId: event.type === "meeting_external" ? "9" : event.type === "trip" ? "6" : "7",
+    };
+  }
+
+  const endExclusive = addDays(event.endDate ?? event.startDate, 1);
+  return {
+    summary,
+    description,
+    start: { date: event.startDate },
+    end: { date: endExclusive },
+    colorId: event.type === "meeting_external" ? "9" : event.type === "trip" ? "6" : "7",
+  };
+}
+
+async function postGoogleEvent(
+  payload: GoogleEventPayload,
+  accessToken: string,
+  calendarId: string
+): Promise<string> {
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
     {
@@ -138,20 +184,48 @@ export async function createGoogleCalendarEvent(
   return data.id;
 }
 
+async function patchGoogleEvent(
+  googleEventId: string,
+  payload: GoogleEventPayload,
+  accessToken: string,
+  calendarId: string
+): Promise<void> {
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`更新 Google 日曆事件失敗：${err}`);
+  }
+}
+
+/** @deprecated 使用 createGoogleLeaveEvent */
+export async function createGoogleCalendarEvent(
+  leave: LeaveRequest,
+  accessToken: string,
+  calendarId = "primary"
+): Promise<string> {
+  return postGoogleEvent(buildLeaveEventPayload(leave), accessToken, calendarId);
+}
+
 export async function syncLeaveToGoogle(leave: LeaveRequest): Promise<string | null> {
   if (leave.status !== "approved") return null;
   if (leave.googleEventId) return leave.googleEventId;
   if (!(await isGoogleConnected())) return null;
 
   const accessToken = await getValidAccessToken();
-  const store = await getStore();
-  const tokens = await getGoogleTokens();
-  const calendarId =
-    store.integrationSettings?.googleCalendarId ??
-    tokens?.calendarId ??
-    "primary";
-  const eventId = await createGoogleCalendarEvent(leave, accessToken, calendarId);
+  const calendarId = await resolveCalendarId();
+  const eventId = await postGoogleEvent(buildLeaveEventPayload(leave), accessToken, calendarId);
 
+  const store = await getStore();
   const stored = store.leaves.find((l) => l.id === leave.id);
   if (stored) {
     stored.googleEventId = eventId;
@@ -161,7 +235,34 @@ export async function syncLeaveToGoogle(leave: LeaveRequest): Promise<string | n
   return eventId;
 }
 
-export async function syncAllApprovedLeaves(): Promise<{
+export async function syncCalendarEventToGoogle(event: CalendarEvent): Promise<string | null> {
+  if (!isGoogleSyncableEventType(event.type)) return null;
+  if (!(await isGoogleConnected())) return null;
+
+  const accessToken = await getValidAccessToken();
+  const calendarId = await resolveCalendarId();
+  const payload = buildCalendarEventPayload(event);
+
+  const store = await getStore();
+  const stored = store.calendarEvents.find((e) => e.id === event.id);
+  if (!stored) return null;
+
+  if (stored.googleEventId) {
+    try {
+      await patchGoogleEvent(stored.googleEventId, payload, accessToken, calendarId);
+      return stored.googleEventId;
+    } catch {
+      // 若遠端已刪，改為新建
+    }
+  }
+
+  const eventId = await postGoogleEvent(payload, accessToken, calendarId);
+  stored.googleEventId = eventId;
+  await saveStore(store);
+  return eventId;
+}
+
+export async function syncCompanyCalendarToGoogle(): Promise<{
   synced: number;
   skipped: number;
   errors: string[];
@@ -181,7 +282,6 @@ export async function syncAllApprovedLeaves(): Promise<{
       skipped++;
       continue;
     }
-
     try {
       const eventId = await syncLeaveToGoogle(leave);
       if (eventId) synced++;
@@ -189,9 +289,32 @@ export async function syncAllApprovedLeaves(): Promise<{
     } catch (error) {
       const message = error instanceof Error ? error.message : "同步失敗";
       console.error("[google-calendar] sync leave failed:", message);
-      errors.push(`${leave.employeeName} (${leave.startDate}): ${message}`);
+      errors.push(`請假 ${leave.employeeName} (${leave.startDate}): ${message}`);
+    }
+  }
+
+  for (const event of store.calendarEvents) {
+    if (!isGoogleSyncableEventType(event.type)) {
+      skipped++;
+      continue;
+    }
+    if (event.googleEventId) {
+      skipped++;
+      continue;
+    }
+    try {
+      const eventId = await syncCalendarEventToGoogle(event);
+      if (eventId) synced++;
+      else skipped++;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "同步失敗";
+      console.error("[google-calendar] sync event failed:", message);
+      errors.push(`事件 ${event.title} (${event.startDate}): ${message}`);
     }
   }
 
   return { synced, skipped, errors };
 }
+
+/** 相容舊名稱 */
+export const syncAllApprovedLeaves = syncCompanyCalendarToGoogle;

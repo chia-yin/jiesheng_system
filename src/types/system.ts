@@ -107,7 +107,17 @@ export interface ProjectSummary {
   sprintTaskDone: number;
 }
 
-export type CalendarEventType = "leave" | "meeting" | "project" | "sprint" | "other";
+export type CalendarEventType =
+  | "leave"
+  | "meeting_external"
+  | "meeting_internal"
+  | "meeting"
+  | "training"
+  | "trip"
+  | "project"
+  | "sprint"
+  | "other";
+
 
 export interface CalendarEvent {
   id: string;

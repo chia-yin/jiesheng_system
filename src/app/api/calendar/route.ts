@@ -6,6 +6,7 @@ import {
   getStoredCalendarEvents,
   updateCalendarEvent,
 } from "@/lib/calendar";
+import { CREATABLE_EVENT_TYPES, normalizeEventType } from "@/lib/calendar-types";
 import type { CalendarEventType } from "@/types/system";
 
 export async function GET(request: Request) {
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const title = String(body.title ?? "").trim();
-    const type = (body.type ?? "meeting") as CalendarEventType;
+    const type = normalizeEventType(String(body.type ?? "meeting_internal"));
     const startDate = String(body.startDate ?? "");
     const endDate = body.endDate ? String(body.endDate) : undefined;
     const startTime = body.startTime ? String(body.startTime) : undefined;
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "請填寫標題與日期" }, { status: 400 });
     }
 
-    if (!["leave", "meeting", "project", "other"].includes(type)) {
+    if (!CREATABLE_EVENT_TYPES.includes(type)) {
       return NextResponse.json({ error: "事件類型無效" }, { status: 400 });
     }
 
@@ -78,9 +79,17 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "缺少事件 ID" }, { status: 400 });
     }
 
+    let type: CalendarEventType | undefined;
+    if (body.type !== undefined) {
+      type = normalizeEventType(String(body.type));
+      if (!CREATABLE_EVENT_TYPES.includes(type) && type !== "meeting") {
+        return NextResponse.json({ error: "事件類型無效" }, { status: 400 });
+      }
+    }
+
     const event = await updateCalendarEvent(id, {
       title: body.title !== undefined ? String(body.title) : undefined,
-      type: body.type as CalendarEventType | undefined,
+      type,
       startDate: body.startDate !== undefined ? String(body.startDate) : undefined,
       endDate: body.endDate !== undefined ? String(body.endDate) : undefined,
       startTime: body.startTime !== undefined ? String(body.startTime) : undefined,

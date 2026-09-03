@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { isGoogleConnected, isGoogleOAuthConfigured, syncAllApprovedLeaves } from "@/lib/google-calendar";
+import { isGoogleConnected, isGoogleOAuthConfigured, syncCompanyCalendarToGoogle } from "@/lib/google-calendar";
 
 export async function POST() {
   try {
@@ -17,7 +17,7 @@ export async function POST() {
       return NextResponse.json({ error: "尚未連結 Google 日曆" }, { status: 400 });
     }
 
-    const result = await syncAllApprovedLeaves();
+    const result = await syncCompanyCalendarToGoogle();
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "同步失敗";

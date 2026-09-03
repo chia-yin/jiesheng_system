@@ -85,12 +85,17 @@ export function sortDayEvents(events: AggregatedCalendarEvent[], date: string): 
 
 function chipPriority(type: CalendarEventType): number {
   switch (type) {
+    case "meeting_external":
+    case "meeting_internal":
     case "meeting":
       return 0;
-    case "project":
+    case "training":
+    case "trip":
       return 1;
-    case "leave":
+    case "project":
       return 2;
+    case "leave":
+      return 3;
     case "sprint":
       return 4;
     default:

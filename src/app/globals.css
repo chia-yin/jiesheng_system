@@ -422,7 +422,11 @@ body {
   }
 
   .cal-event-item--leave { border-left-color: #10b981; }
+  .cal-event-item--meeting_external { border-left-color: #6366f1; }
+  .cal-event-item--meeting_internal { border-left-color: #3b82f6; }
   .cal-event-item--meeting { border-left-color: #3b82f6; }
+  .cal-event-item--training { border-left-color: #06b6d4; }
+  .cal-event-item--trip { border-left-color: #f97316; }
   .cal-event-item--project { border-left-color: #f59e0b; }
   .cal-event-item--sprint { border-left-color: #8b5cf6; }
   .cal-event-item--other { border-left-color: #94a3b8; }
@@ -492,7 +496,11 @@ body {
   }
 
   .cal-event-detail--leave { border-left-color: #10b981; }
+  .cal-event-detail--meeting_external { border-left-color: #6366f1; }
+  .cal-event-detail--meeting_internal { border-left-color: #3b82f6; }
   .cal-event-detail--meeting { border-left-color: #3b82f6; }
+  .cal-event-detail--training { border-left-color: #06b6d4; }
+  .cal-event-detail--trip { border-left-color: #f97316; }
   .cal-event-detail--project { border-left-color: #f59e0b; }
   .cal-event-detail--sprint { border-left-color: #8b5cf6; }
   .cal-event-detail--other { border-left-color: #94a3b8; }
