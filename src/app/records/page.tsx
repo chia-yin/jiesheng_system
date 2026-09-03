@@ -719,38 +719,130 @@ function AdminMakeupRow({
   date: string;
   onSuccess: () => void;
 }) {
-  const hasClockIn = Boolean(emp.clockIn);
-  const hasClockOut = Boolean(emp.clockOut);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
-  const canMakeup = date <= today && (!hasClockIn || !hasClockOut);
   const [open, setOpen] = useState(false);
 
-  if (!canMakeup) return null;
+  if (date > today) return null;
 
   return (
-    <tr className="border-b border-amber-100 bg-amber-50/40 last:border-0">
-      <td colSpan={7} className="px-3 py-2">
+    <tr className="border-b border-[var(--line)] bg-slate-50/60 last:border-0">
+      <td colSpan={6} className="px-3 py-2">
         {!open ? (
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-900"
+            className="flex items-center gap-1.5 text-xs text-[var(--primary)] hover:underline"
           >
             <ClipboardEdit className="h-3.5 w-3.5" />
-            替 {emp.employeeName} 補卡
+            替 {emp.employeeName} 補卡／修正打卡
           </button>
         ) : (
-          <MakeupClockPanel
+          <AdminMakeupPanel
             date={date}
-            hasClockIn={hasClockIn}
-            hasClockOut={hasClockOut}
-            employeeId={emp.employeeId}
-            employeeName={emp.employeeName}
+            emp={emp}
             onSuccess={() => { setOpen(false); onSuccess(); }}
+            onCancel={() => setOpen(false)}
           />
         )}
       </td>
     </tr>
+  );
+}
+
+function AdminMakeupPanel({
+  date,
+  emp,
+  onSuccess,
+  onCancel,
+}: {
+  date: string;
+  emp: EmployeeDaySummary;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  const hasClockIn = Boolean(emp.clockIn);
+  const hasClockOut = Boolean(emp.clockOut);
+
+  // 預設類型：缺什麼補什麼；兩個都有則預設修上班
+  const defaultType: "in" | "out" = !hasClockIn ? "in" : !hasClockOut ? "out" : "in";
+  const [type, setType] = useState<"in" | "out">(defaultType);
+  const [time, setTime] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // 是否為「修正」（已有該筆紀錄）
+  const isOverride = type === "in" ? hasClockIn : hasClockOut;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!time || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/clock/correction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date,
+          time,
+          type,
+          employeeId: emp.employeeId,
+          force: true,  // 管理員一律允許覆蓋
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "補卡失敗");
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "補卡失敗");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+      <p className="mb-2 text-xs font-semibold text-amber-800">
+        {emp.employeeName}・{date}
+      </p>
+      <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+        <div>
+          <label className="mb-1 block text-xs text-[var(--muted)]">類型</label>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as "in" | "out")}
+            className="input-field py-1.5 text-sm"
+          >
+            <option value="in">{hasClockIn ? "修正上班（已有 → 覆蓋）" : "補上班打卡"}</option>
+            <option value="out">{hasClockOut ? "修正下班（已有 → 覆蓋）" : "補下班打卡"}</option>
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs text-[var(--muted)]">時間</label>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            required
+            className="input-field py-1.5 text-sm font-mono"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={saving || !time}
+          className="btn-primary py-1.5 text-sm disabled:opacity-50"
+        >
+          {saving ? "處理中…" : isOverride ? "確認修正" : "確認補卡"}
+        </button>
+        <button type="button" onClick={onCancel} className="btn-secondary py-1.5 text-sm">
+          取消
+        </button>
+      </form>
+      {error && <p className="mt-2 text-xs text-[var(--danger)]">{error}</p>}
+      {isOverride && (
+        <p className="mt-1.5 text-[11px] text-amber-700">此操作會刪除原有紀錄並以新時間取代。</p>
+      )}
+    </div>
   );
 }
 

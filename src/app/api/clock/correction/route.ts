@@ -9,11 +9,12 @@ export async function POST(request: Request) {
     if (!session) return NextResponse.json({ error: "未登入" }, { status: 401 });
 
     const body = await request.json();
-    const { date, time, type, employeeId } = body as {
+    const { date, time, type, employeeId, force } = body as {
       date?: string;
       time?: string;
       type?: ClockType;
       employeeId?: string;
+      force?: boolean;
     };
 
     if (!date || !time || !type) {
@@ -27,7 +28,8 @@ export async function POST(request: Request) {
     const targetId = session.role === "admin" && employeeId ? employeeId : session.employeeId;
     if (!targetId) return NextResponse.json({ error: "找不到員工" }, { status: 400 });
 
-    const result = await makeupClock(targetId, type, date, time, session.employeeId!, session.role as "admin" | "employee");
+    const isAdmin = session.role === "admin";
+    const result = await makeupClock(targetId, type, date, time, session.employeeId!, session.role as "admin" | "employee", isAdmin && Boolean(force));
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "補卡失敗";

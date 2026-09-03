@@ -364,7 +364,8 @@ export async function makeupClock(
   date: string,
   time: string,
   requesterId: string,
-  requesterRole: "admin" | "employee"
+  requesterRole: "admin" | "employee",
+  force = false   // 管理員可強制覆蓋已有紀錄
 ) {
   const store = await getStore();
   const employee = store.employees.find((e) => e.id === employeeId);
@@ -374,13 +375,21 @@ export async function makeupClock(
   }
 
   const settings = getWorkSettings(store.workSettings);
-  // 組台北時區的 ISO 時間字串
   const timestamp = new Date(`${date}T${time}:00+08:00`).toISOString();
 
   const { clockIn, clockOut } = getDayRecords(store.records, employeeId, date);
-  if (type === "in" && clockIn) throw new Error(`${date} 已有上班打卡（${clockIn.timestamp.slice(11, 16)} UTC）`);
-  if (type === "out" && clockOut) throw new Error(`${date} 已有下班打卡`);
-  if (type === "out" && !clockIn) throw new Error(`${date} 尚無上班打卡，請先補上班`);
+
+  if (type === "out" && !clockIn && !force) throw new Error(`${date} 尚無上班打卡，請先補上班`);
+
+  // force 模式：先刪掉同日同類型的舊紀錄再寫新的
+  if (force && requesterRole === "admin") {
+    store.records = store.records.filter(
+      (r) => !(r.employeeId === employeeId && r.timestamp.startsWith(date) && r.type === type)
+    );
+  } else {
+    if (type === "in" && clockIn) throw new Error(`${date} 已有上班打卡，如需修改請聯絡管理員`);
+    if (type === "out" && clockOut) throw new Error(`${date} 已有下班打卡，如需修改請聯絡管理員`);
+  }
 
   const record: AttendanceRecord = {
     id: newId("rec"),
@@ -388,7 +397,7 @@ export async function makeupClock(
     employeeName: employee.name,
     type,
     timestamp,
-    note: "補卡",
+    note: force ? "管理員修正" : "補卡",
   };
 
   if (type === "in") {
@@ -400,9 +409,11 @@ export async function makeupClock(
   store.records.unshift(record);
   await saveStore(store);
 
+  // 取更新後的上班紀錄計算工時
+  const { clockIn: newClockIn } = getDayRecords(store.records, employeeId, date);
   const workMinutes =
-    type === "out" && clockIn
-      ? calcWorkMinutes(clockIn.timestamp, timestamp, settings.breakMinutes)
+    type === "out" && newClockIn
+      ? calcWorkMinutes(newClockIn.timestamp, timestamp, settings.breakMinutes)
       : 0;
 
   return { record, lateMinutes: record.lateMinutes ?? 0, earlyLeaveMinutes: record.earlyLeaveMinutes ?? 0, workMinutes, settings };
