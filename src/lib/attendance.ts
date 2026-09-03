@@ -293,7 +293,7 @@ export async function clockInOut(employeeId: string, type: ClockType, note?: str
 
   const settings = getWorkSettings(store.workSettings);
   const now = new Date().toISOString();
-  const today = now.slice(0, 10);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
   const { clockIn, clockOut } = getDayRecords(store.records, employeeId, today);
 
   if (type === "in" && clockIn && !clockOut) {

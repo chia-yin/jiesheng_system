@@ -21,8 +21,16 @@ function minutesToTimeStr(totalMinutes: number): string {
 }
 
 function isoToMinutesOfDay(iso: string): number {
+  // 使用台北時區取得當地時與分，避免伺服器時區（UTC）影響計算
   const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
+  const hhmm = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Taipei",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d); // "HH:MM"
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
 }
 
 function getDateKey(iso: string): string {

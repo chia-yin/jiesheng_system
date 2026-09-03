@@ -485,7 +485,7 @@ export default function RecordsPage() {
         {loadingDay ? (
           <p className="py-8 text-center text-sm text-[var(--muted)]">載入中…</p>
         ) : isAdmin && allDetail ? (
-          <AllDayPanel detail={allDetail} />
+          <AllDayPanel detail={allDetail} onRefresh={() => { loadDayDetail(selectedDate, filterEmployeeId || undefined); loadMonth(); }} />
         ) : !isAdmin && myDetail ? (
           <MyDayPanel
             detail={myDetail}
@@ -507,11 +507,15 @@ function MakeupClockPanel({
   hasClockIn,
   hasClockOut,
   onSuccess,
+  employeeId,
+  employeeName,
 }: {
   date: string;
   hasClockIn: boolean;
   hasClockOut: boolean;
   onSuccess: () => void;
+  employeeId?: string;
+  employeeName?: string;
 }) {
   const [type, setType] = useState<"in" | "out">(hasClockIn ? "out" : "in");
   const [time, setTime] = useState("");
@@ -530,7 +534,7 @@ function MakeupClockPanel({
       const res = await fetch("/api/clock/correction", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, time, type }),
+        body: JSON.stringify({ date, time, type, ...(employeeId ? { employeeId } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "補卡失敗");
@@ -551,7 +555,7 @@ function MakeupClockPanel({
     <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
       <h4 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-amber-800">
         <ClipboardEdit className="h-4 w-4" />
-        補卡申請
+        {employeeName ? `補卡 — ${employeeName}` : "補卡申請"}
       </h4>
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
         {availableTypes.length > 1 && (
@@ -706,7 +710,51 @@ function MyDayPanel({ detail, onRefresh }: { detail: MyDayDetail; onRefresh?: ()
   );
 }
 
-function AllDayPanel({ detail }: { detail: AllDayDetail }) {
+function AdminMakeupRow({
+  emp,
+  date,
+  onSuccess,
+}: {
+  emp: EmployeeDaySummary;
+  date: string;
+  onSuccess: () => void;
+}) {
+  const hasClockIn = Boolean(emp.clockIn);
+  const hasClockOut = Boolean(emp.clockOut);
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+  const canMakeup = date <= today && (!hasClockIn || !hasClockOut);
+  const [open, setOpen] = useState(false);
+
+  if (!canMakeup) return null;
+
+  return (
+    <tr className="border-b border-amber-100 bg-amber-50/40 last:border-0">
+      <td colSpan={7} className="px-3 py-2">
+        {!open ? (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-900"
+          >
+            <ClipboardEdit className="h-3.5 w-3.5" />
+            替 {emp.employeeName} 補卡
+          </button>
+        ) : (
+          <MakeupClockPanel
+            date={date}
+            hasClockIn={hasClockIn}
+            hasClockOut={hasClockOut}
+            employeeId={emp.employeeId}
+            employeeName={emp.employeeName}
+            onSuccess={() => { setOpen(false); onSuccess(); }}
+          />
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function AllDayPanel({ detail, onRefresh }: { detail: AllDayDetail; onRefresh?: () => void }) {
   const { employees, leaves } = detail;
 
   const sorted = [...employees].sort((a, b) => {
@@ -758,23 +806,31 @@ function AllDayPanel({ detail }: { detail: AllDayDetail }) {
           <tbody>
             {sorted.length ? (
               sorted.map((emp) => (
-                <tr
-                  key={emp.employeeId}
-                  className={`border-b border-[var(--line)] last:border-0 ${
-                    emp.status === "absent" ? "is-absent" : ""
-                  }`}
-                >
-                  <td className="px-3 py-2.5 font-medium">{emp.employeeName}</td>
-                  <td className="px-3 py-2.5 text-[var(--muted)]">{emp.department}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs">{formatTime(emp.clockIn)}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs">{formatTime(emp.clockOut)}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs">
-                    {emp.workMinutes > 0 ? formatWorkMinutes(emp.workMinutes) : "—"}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <StatusChip status={emp.status} />
-                  </td>
-                </tr>
+                <>
+                  <tr
+                    key={emp.employeeId}
+                    className={`border-b border-[var(--line)] ${
+                      emp.status === "absent" ? "is-absent" : ""
+                    }`}
+                  >
+                    <td className="px-3 py-2.5 font-medium">{emp.employeeName}</td>
+                    <td className="px-3 py-2.5 text-[var(--muted)]">{emp.department}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{formatTime(emp.clockIn)}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">{formatTime(emp.clockOut)}</td>
+                    <td className="px-3 py-2.5 font-mono text-xs">
+                      {emp.workMinutes > 0 ? formatWorkMinutes(emp.workMinutes) : "—"}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <StatusChip status={emp.status} />
+                    </td>
+                  </tr>
+                  <AdminMakeupRow
+                    key={`makeup-${emp.employeeId}`}
+                    emp={emp}
+                    date={detail.date}
+                    onSuccess={() => onRefresh?.()}
+                  />
+                </>
               ))
             ) : (
               <tr>
