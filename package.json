@@ -3,23 +3,35 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "bash scripts/dev.sh",
+    "dev:clean": "rm -rf .next && bash scripts/dev.sh",
+    "clean": "rm -rf .next node_modules/.cache",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "build:check": "next build",
+    "migrate:supabase": "node scripts/migrate-to-supabase.mjs",
+    "sync:supabase-auth": "node scripts/sync-supabase-auth.mjs",
+    "netlify:login": "netlify login",
+    "netlify:init": "netlify init",
+    "netlify:deploy": "netlify deploy --build --prod"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.113.0",
+    "lucide-react": "^1.39.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@netlify/plugin-nextjs": "^5.15.13",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.20",
     "eslint": "^9.17.0",
     "eslint-config-next": "^15.1.0",
+    "netlify-cli": "^27.4.2",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2"

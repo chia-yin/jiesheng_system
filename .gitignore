@@ -32,4 +32,13 @@ build/
 logs/
 .cache/
 data/attendance.json
+data/system.json
 .next/
+
+# Local Netlify folder
+.netlify
+
+# TypeScript / tooling caches
+tsconfig.tsbuildinfo
+supabase/.temp/
+deno.lock
