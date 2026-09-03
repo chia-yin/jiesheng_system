@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  ClipboardEdit,
   ExternalLink,
   LogOut,
   Plane,
@@ -486,7 +487,13 @@ export default function RecordsPage() {
         ) : isAdmin && allDetail ? (
           <AllDayPanel detail={allDetail} />
         ) : !isAdmin && myDetail ? (
-          <MyDayPanel detail={myDetail} />
+          <MyDayPanel
+            detail={myDetail}
+            onRefresh={() => {
+              loadDayDetail(selectedDate);
+              loadMonth();
+            }}
+          />
         ) : (
           <p className="py-8 text-center text-sm text-[var(--muted)]">無法載入資料</p>
         )}
@@ -495,8 +502,107 @@ export default function RecordsPage() {
   );
 }
 
-function MyDayPanel({ detail }: { detail: MyDayDetail }) {
+function MakeupClockPanel({
+  date,
+  hasClockIn,
+  hasClockOut,
+  onSuccess,
+}: {
+  date: string;
+  hasClockIn: boolean;
+  hasClockOut: boolean;
+  onSuccess: () => void;
+}) {
+  const [type, setType] = useState<"in" | "out">(hasClockIn ? "out" : "in");
+  const [time, setTime] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  // 如果兩筆都有就不顯示
+  if (hasClockIn && hasClockOut) return null;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!time || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/clock/correction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date, time, type }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "補卡失敗");
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "補卡失敗");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const availableTypes = [
+    ...(!hasClockIn ? [{ value: "in", label: "補上班打卡" }] : []),
+    ...(!hasClockOut && hasClockIn ? [{ value: "out", label: "補下班打卡" }] : []),
+  ] as { value: "in" | "out"; label: string }[];
+
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+      <h4 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-amber-800">
+        <ClipboardEdit className="h-4 w-4" />
+        補卡申請
+      </h4>
+      <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+        {availableTypes.length > 1 && (
+          <div>
+            <label className="mb-1 block text-xs text-[var(--muted)]">類型</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as "in" | "out")}
+              className="input-field py-1.5 text-sm"
+            >
+              {availableTypes.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {availableTypes.length === 1 && (
+          <p className="text-sm text-amber-800">{availableTypes[0].label}</p>
+        )}
+        <div>
+          <label className="mb-1 block text-xs text-[var(--muted)]">時間</label>
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            required
+            className="input-field py-1.5 text-sm font-mono"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={saving || !time}
+          className="btn-primary py-1.5 text-sm disabled:opacity-50"
+        >
+          {saving ? "補卡中…" : "確認補卡"}
+        </button>
+      </form>
+      {error && <p className="mt-2 text-xs text-[var(--danger)]">{error}</p>}
+      <p className="mt-2 text-[11px] text-amber-700">補卡後立即生效，無需審核。</p>
+    </div>
+  );
+}
+
+function MyDayPanel({ detail, onRefresh }: { detail: MyDayDetail; onRefresh?: () => void }) {
   const { summary, records, leaves, calendarEvents } = detail;
+  const hasClockIn = Boolean(summary.clockIn);
+  const hasClockOut = Boolean(summary.clockOut);
+  // 只有過去或今天才可補卡
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
+  const isPastOrToday = detail.date <= today;
+  const canMakeup = isPastOrToday && (!hasClockIn || !hasClockOut);
 
   return (
     <div className="space-y-4">
@@ -584,7 +690,16 @@ function MyDayPanel({ detail }: { detail: MyDayDetail }) {
         </div>
       )}
 
-      {records.length === 0 && leaves.length === 0 && calendarEvents.length === 0 && (
+      {canMakeup && (
+        <MakeupClockPanel
+          date={detail.date}
+          hasClockIn={hasClockIn}
+          hasClockOut={hasClockOut}
+          onSuccess={() => onRefresh?.()}
+        />
+      )}
+
+      {records.length === 0 && leaves.length === 0 && calendarEvents.length === 0 && !canMakeup && (
         <p className="py-6 text-center text-sm text-[var(--muted)]">當日無出勤或請假紀錄</p>
       )}
     </div>
