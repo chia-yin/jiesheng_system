@@ -37,87 +37,64 @@ const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
 const TYPE_CONFIG: Record<
   CalendarEventType,
-  { label: string; chip: string; legend: string; dot: string }
+  { label: string; chip: string; dot: string }
 > = {
   leave: {
     label: EVENT_TYPE_LABEL.leave,
     chip: "bg-emerald-50 text-emerald-700 border-emerald-200/60",
-    legend: "cal-legend-chip bg-emerald-50 text-emerald-700 border-emerald-200/60",
     dot: "bg-emerald-500",
   },
   meeting_external: {
     label: EVENT_TYPE_LABEL.meeting_external,
     chip: "bg-indigo-50 text-indigo-700 border-indigo-200/60",
-    legend: "cal-legend-chip bg-indigo-50 text-indigo-700 border-indigo-200/60",
     dot: "bg-indigo-500",
   },
   meeting_internal: {
     label: EVENT_TYPE_LABEL.meeting_internal,
     chip: "bg-blue-50 text-blue-700 border-blue-200/60",
-    legend: "cal-legend-chip bg-blue-50 text-blue-700 border-blue-200/60",
     dot: "bg-blue-500",
   },
   meeting: {
     label: EVENT_TYPE_LABEL.meeting,
     chip: "bg-blue-50 text-blue-700 border-blue-200/60",
-    legend: "cal-legend-chip bg-blue-50 text-blue-700 border-blue-200/60",
     dot: "bg-blue-500",
   },
   company_event: {
     label: EVENT_TYPE_LABEL.company_event,
     chip: "bg-pink-50 text-pink-700 border-pink-200/60",
-    legend: "cal-legend-chip bg-pink-50 text-pink-700 border-pink-200/60",
     dot: "bg-pink-500",
   },
   milestone: {
     label: EVENT_TYPE_LABEL.milestone,
     chip: "bg-rose-50 text-rose-700 border-rose-200/60",
-    legend: "cal-legend-chip bg-rose-50 text-rose-700 border-rose-200/60",
     dot: "bg-rose-500",
   },
   training: {
     label: EVENT_TYPE_LABEL.training,
     chip: "bg-cyan-50 text-cyan-700 border-cyan-200/60",
-    legend: "cal-legend-chip bg-cyan-50 text-cyan-700 border-cyan-200/60",
     dot: "bg-cyan-500",
   },
   trip: {
     label: EVENT_TYPE_LABEL.trip,
     chip: "bg-orange-50 text-orange-700 border-orange-200/60",
-    legend: "cal-legend-chip bg-orange-50 text-orange-700 border-orange-200/60",
     dot: "bg-orange-500",
   },
   project: {
     label: EVENT_TYPE_LABEL.project,
     chip: "bg-amber-50 text-amber-700 border-amber-200/60",
-    legend: "cal-legend-chip bg-amber-50 text-amber-700 border-amber-200/60",
     dot: "bg-amber-500",
   },
   sprint: {
     label: EVENT_TYPE_LABEL.sprint,
     chip: "bg-violet-50 text-violet-700 border-violet-200/60",
-    legend: "cal-legend-chip bg-violet-50 text-violet-700 border-violet-200/60",
     dot: "bg-violet-500",
   },
   other: {
     label: EVENT_TYPE_LABEL.other,
     chip: "bg-slate-50 text-slate-600 border-slate-200/60",
-    legend: "cal-legend-chip bg-slate-50 text-slate-600 border-slate-200/60",
     dot: "bg-slate-400",
   },
 };
-
-const LEGEND_TYPES: CalendarEventType[] = [
-  "leave",
-  "meeting_external",
-  "meeting_internal",
-  "company_event",
-  "milestone",
-  "project",
-  "sprint",
-  "other",
-];
-
 
 interface GoogleStatus {
   configured: boolean;
@@ -599,7 +576,7 @@ function CalendarPage() {
           ))}
         </select>
         <p className="mt-1 text-xs text-[var(--faint)]">
-          帶 [] 的類型會同步公司 Google；「其他」僅系統內顯示。
+          帶 [] 的類型會同步公司 Google；「[其他]」僅系統內顯示。
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -731,16 +708,6 @@ function CalendarPage() {
           </button>
         </div>
       </section>
-
-      {/* 圖例 */}
-      <div className="flex flex-wrap items-center gap-2">
-        {LEGEND_TYPES.map((type) => (
-          <span key={type} className={TYPE_CONFIG[type].legend}>
-            <span className={`h-2 w-2 rounded-full ${TYPE_CONFIG[type].dot}`} />
-            {TYPE_CONFIG[type].label}
-          </span>
-        ))}
-      </div>
 
       {/* 月曆 */}
       <section className="card overflow-hidden">

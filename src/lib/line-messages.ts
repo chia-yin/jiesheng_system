@@ -69,7 +69,7 @@ export function buildClockResultFlex(
         type: "box",
         layout: "vertical",
         contents: [
-          { type: "text", text: "✅ " + label, weight: "bold", size: "lg", color: "#059669" },
+          { type: "text", text: label, weight: "bold", size: "lg", color: "#059669" },
           { type: "text", text: employeeName, size: "sm", color: "#64748b", margin: "sm" },
           {
             type: "box",
@@ -118,7 +118,7 @@ export function buildReminderFlex(type: "in" | "out", employeeName: string, time
         type: "box",
         layout: "vertical",
         contents: [
-          { type: "text", text: "⏰ " + title, weight: "bold", size: "lg", color: "#2563eb" },
+          { type: "text", text: title, weight: "bold", size: "lg", color: "#2563eb" },
           { type: "text", text: hint, wrap: true, size: "sm", color: "#64748b", margin: "md" },
           {
             type: "text",
@@ -145,6 +145,32 @@ const LEAVE_TYPE_LABEL: Record<string, string> = {
   other: "其他",
 };
 
+function leaveDetailRow(label: string, value: string) {
+  return {
+    type: "box" as const,
+    layout: "baseline" as const,
+    spacing: "sm" as const,
+    contents: [
+      {
+        type: "text" as const,
+        text: label,
+        color: "#94a3b8",
+        size: "sm" as const,
+        flex: 2,
+      },
+      {
+        type: "text" as const,
+        text: value,
+        wrap: true,
+        size: "sm" as const,
+        color: "#0f172a",
+        flex: 5,
+        weight: "bold" as const,
+      },
+    ],
+  };
+}
+
 /** 新請假申請 → 通知管理員 */
 export function buildLeaveApplicationFlex(input: {
   employeeName: string;
@@ -159,27 +185,61 @@ export function buildLeaveApplicationFlex(input: {
     input.startDate === input.endDate
       ? input.startDate
       : `${input.startDate} ~ ${input.endDate}`;
+  const daysLabel = `${input.days} 天`;
 
   return {
     type: "flex",
-    altText: `請假申請：${input.employeeName} ${typeLabel}`,
+    altText: `請假待審核：${input.employeeName} ${typeLabel} ${range}`,
     contents: {
       type: "bubble",
+      header: {
+        type: "box",
+        layout: "vertical",
+        backgroundColor: "#2563eb",
+        paddingAll: "16px",
+        contents: [
+          {
+            type: "text",
+            text: "請假待審核",
+            weight: "bold",
+            size: "lg",
+            color: "#ffffff",
+          },
+          {
+            type: "text",
+            text: "請至系統核准或退回",
+            size: "xs",
+            color: "#bfdbfe",
+            margin: "sm",
+          },
+        ],
+      },
       body: {
         type: "box",
         layout: "vertical",
+        spacing: "md",
         contents: [
-          { type: "text", text: "📩 新的請假申請", weight: "bold", size: "lg", color: "#2563eb" },
-          { type: "text", text: input.employeeName, size: "md", weight: "bold", margin: "md" },
+          {
+            type: "text",
+            text: input.employeeName,
+            size: "xl",
+            weight: "bold",
+            color: "#0f172a",
+          },
+          {
+            type: "separator",
+            margin: "sm",
+          },
           {
             type: "box",
             layout: "vertical",
-            margin: "lg",
             spacing: "sm",
+            margin: "md",
             contents: [
-              { type: "text", text: `假別：${typeLabel}`, size: "sm", wrap: true },
-              { type: "text", text: `日期：${range}（${input.days} 天）`, size: "sm", wrap: true },
-              { type: "text", text: `事由：${input.reason}`, size: "sm", wrap: true, color: "#64748b" },
+              leaveDetailRow("假別", typeLabel),
+              leaveDetailRow("日期", range),
+              leaveDetailRow("天數", daysLabel),
+              leaveDetailRow("事由", input.reason || "—"),
             ],
           },
         ],
@@ -187,7 +247,8 @@ export function buildLeaveApplicationFlex(input: {
       footer: {
         type: "box",
         layout: "vertical",
-        contents: [siteButton("前往審核", "/leave?tab=pending")],
+        spacing: "sm",
+        contents: [siteButton("開啟請假審核", "/leave?tab=pending")],
       },
     },
   };

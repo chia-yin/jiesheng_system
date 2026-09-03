@@ -348,7 +348,7 @@ export default function ProjectDetailPage() {
         description: taskDescription || undefined,
         status: taskStatus,
         priority: taskPriority,
-        assigneeId: taskAssigneeId || undefined,
+        assigneeId: taskAssigneeId ? taskAssigneeId : null,
         dueDate: taskDueDate || undefined,
       };
 
@@ -385,6 +385,21 @@ export default function ProjectDetailPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
+      });
+      if (res.ok) await load();
+    } finally {
+      setStatusBusyId(null);
+    }
+  }
+
+  async function updateTaskAssignee(task: Task, assigneeId: string) {
+    if (!isAdmin || statusBusyId) return;
+    setStatusBusyId(task.id);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assigneeId: assigneeId || null }),
       });
       if (res.ok) await load();
     } finally {
@@ -494,7 +509,7 @@ export default function ProjectDetailPage() {
                 編輯專案
               </button>
             )}
-            {isAdmin && (tab === "tasks" || tab === "overview") && (
+            {isAdmin && (tab === "tasks" || tab === "overview" || tab === "kanban") && (
               <button type="button" onClick={() => openTaskModal()} className="btn-primary gap-1.5 px-3 py-2 text-xs">
                 <Plus className="h-3.5 w-3.5" />
                 新增任務
@@ -570,7 +585,7 @@ export default function ProjectDetailPage() {
                       key={task.id}
                       type="button"
                       onClick={() => {
-                        if (isAdmin || canEditTask(task)) openTaskModal(task);
+                        if (isAdmin) openTaskModal(task);
                         else setTab("tasks");
                       }}
                       className="rounded-xl border border-[var(--line)] bg-white p-3 text-left transition hover:border-[var(--primary)]/40 hover:shadow-sm"
@@ -588,9 +603,10 @@ export default function ProjectDetailPage() {
                                 本週
                               </span>
                             )}
-                            {task.assigneeName && (
-                              <span className="text-[11px] text-[var(--faint)]">{task.assigneeName}</span>
-                            )}
+                            <span className="inline-flex items-center gap-1 text-[11px] text-[var(--faint)]">
+                              <User className="h-3 w-3 shrink-0" />
+                              {task.assigneeName ?? "未指派"}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -609,22 +625,27 @@ export default function ProjectDetailPage() {
 
         {tab === "kanban" && (
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
-              <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 font-medium text-blue-700">
-                本週
-              </span>
-              標籤表示已納入本週 Sprint
-              {companySprint && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterScope("sprint");
-                    setTab("tasks");
-                  }}
-                  className="text-[var(--primary)] hover:underline"
-                >
-                  · 只看本週任務
-                </button>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--muted)]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 font-medium text-blue-700">
+                  本週
+                </span>
+                表示已納入本週 Sprint
+                {companySprint && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterScope("sprint");
+                      setTab("tasks");
+                    }}
+                    className="text-[var(--primary)] hover:underline"
+                  >
+                    · 只看本週任務
+                  </button>
+                )}
+              </div>
+              {isAdmin && (
+                <p className="text-[var(--faint)]">點卡片可編輯／指派負責人</p>
               )}
             </div>
             <div className="grid gap-3 overflow-x-auto lg:grid-cols-5">
@@ -649,25 +670,68 @@ export default function ProjectDetailPage() {
                           <div className="flex items-start gap-2">
                             <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[task.priority]}`} />
                             <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <p className="text-sm font-medium">{task.title}</p>
+                              <div className="flex items-start justify-between gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isAdmin) openTaskModal(task);
+                                  }}
+                                  className={`min-w-0 flex-1 text-left text-sm font-medium ${
+                                    isAdmin ? "hover:text-[var(--primary)]" : ""
+                                  }`}
+                                >
+                                  {task.title}
+                                </button>
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openTaskModal(task)}
+                                    className="shrink-0 rounded p-1 text-[var(--muted)] hover:bg-slate-100 hover:text-[var(--primary)]"
+                                    aria-label="編輯任務"
+                                    title="編輯任務"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                 {isThisSprint(task) && (
                                   <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
                                     本週
                                   </span>
                                 )}
+                                <span className="inline-flex items-center gap-1 text-[11px] text-[var(--muted)]">
+                                  <User className="h-3 w-3 shrink-0" />
+                                  {task.assigneeName ?? "未指派"}
+                                </span>
                               </div>
-                              {task.assigneeName && (
-                                <p className="mt-1 text-xs text-[var(--faint)]">{task.assigneeName}</p>
-                              )}
                             </div>
                           </div>
+
+                          {isAdmin && (
+                            <select
+                              value={task.assigneeId ?? ""}
+                              disabled={statusBusyId === task.id}
+                              onChange={(e) => updateTaskAssignee(task, e.target.value)}
+                              className="input-field mt-2 py-1 text-xs disabled:opacity-50"
+                              aria-label="指派負責人"
+                            >
+                              <option value="">未指派</option>
+                              {employees.map((emp) => (
+                                <option key={emp.id} value={emp.id}>
+                                  {emp.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+
                           {canEditTask(task) && (
                             <select
                               value={task.status}
                               disabled={statusBusyId === task.id}
                               onChange={(e) => updateTaskStatus(task, e.target.value as TaskStatus)}
-                              className="input-field mt-2 py-1 text-xs disabled:opacity-50"
+                              className="input-field mt-1.5 py-1 text-xs disabled:opacity-50"
+                              aria-label="更新狀態"
                             >
                               {TASK_STATUS_OPTIONS.map((s) => (
                                 <option key={s.value} value={s.value}>
@@ -678,6 +742,9 @@ export default function ProjectDetailPage() {
                           )}
                         </div>
                       ))}
+                      {!colTasks.length && (
+                        <p className="px-1 py-4 text-center text-[11px] text-[var(--faint)]">尚無任務</p>
+                      )}
                     </div>
                   </div>
                 );

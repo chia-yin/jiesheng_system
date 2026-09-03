@@ -29,8 +29,18 @@ export const EVENT_TYPE_LABEL: Record<CalendarEventType, string> = {
   trip: "[出差]",
   project: "[專案]",
   sprint: "[迭代]",
-  other: "其他",
+  other: "[其他]",
 };
+
+/** 月曆／列表顯示標題：補上 `[類型]`（已有括號前綴則不重複） */
+export function formatEventDisplayTitle(type: CalendarEventType, title: string): string {
+  const prefix = EVENT_TYPE_LABEL[type];
+  if (!prefix) return title;
+  const trimmed = title.trim();
+  if (trimmed.startsWith("[")) return trimmed;
+  if (prefix.startsWith("[")) return `${prefix} ${trimmed}`;
+  return `[${prefix}] ${trimmed}`;
+}
 
 /** 請假同步／月曆標題：`[休假] 陳家盈 特休` */
 export function formatLeaveTitle(employeeName: string, leaveTypeLabel: string): string {

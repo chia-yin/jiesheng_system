@@ -40,14 +40,32 @@ export async function updateEmployee(id: string, data: Partial<Omit<Employee, "i
   const index = store.employees.findIndex((e) => e.id === id);
   if (index === -1) throw new Error("找不到員工");
 
-  if (data.username && store.employees.some((e) => e.username === data.username && e.id !== id)) {
+  // 只套用有傳入的欄位，避免 password: undefined 把密碼清掉
+  const patch: Partial<Omit<Employee, "id">> = {};
+  if (data.name !== undefined) patch.name = data.name;
+  if (data.department !== undefined) patch.department = data.department;
+  if (data.role !== undefined) patch.role = data.role;
+  if (data.username !== undefined) patch.username = data.username;
+  if (data.password !== undefined && data.password !== "") patch.password = data.password;
+  if (data.email !== undefined) patch.email = data.email.trim() ? data.email.trim() : undefined;
+  if (data.googleId !== undefined) patch.googleId = data.googleId || undefined;
+  if (data.lineUserId !== undefined) patch.lineUserId = data.lineUserId || undefined;
+
+  if (patch.username && store.employees.some((e) => e.username === patch.username && e.id !== id)) {
     throw new Error("帳號已存在");
   }
-  if (data.email && store.employees.some((e) => e.email?.toLowerCase() === data.email!.toLowerCase() && e.id !== id)) {
+  if (
+    patch.email &&
+    store.employees.some((e) => e.email?.toLowerCase() === patch.email!.toLowerCase() && e.id !== id)
+  ) {
     throw new Error("Google Email 已存在");
   }
 
-  store.employees[index] = { ...store.employees[index], ...data };
+  const next = { ...store.employees[index], ...patch };
+  if (data.email !== undefined && !patch.email) {
+    delete next.email;
+  }
+  store.employees[index] = next;
   await saveStore(store);
   return toPublicEmployee(store.employees[index]);
 }

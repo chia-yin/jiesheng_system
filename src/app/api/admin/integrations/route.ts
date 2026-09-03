@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getStore, saveStore } from "@/lib/db";
-import { isGoogleConnected, isGoogleOAuthConfigured } from "@/lib/google-calendar";
+import {
+  isGoogleConnected,
+  isGoogleOAuthConfigured,
+  syncCompanyCalendarToGoogle,
+} from "@/lib/google-calendar";
 import { isLineEnabled } from "@/lib/line";
 import { resolveLineRichMenuId } from "@/lib/line-rich-menu";
 
@@ -40,6 +44,8 @@ export async function PATCH(request: Request) {
     await requireAdmin();
     const body = await request.json();
     const store = await getStore();
+    const previousCalendarId = resolveCalendarId(store);
+    let calendarChanged = false;
 
     if (body.lineRichMenuId !== undefined) {
       const id = String(body.lineRichMenuId ?? "").trim();
@@ -51,6 +57,7 @@ export async function PATCH(request: Request) {
 
     if (body.googleCalendarId !== undefined) {
       const calendarId = String(body.googleCalendarId ?? "").trim() || "primary";
+      calendarChanged = calendarId !== previousCalendarId;
       store.integrationSettings = {
         ...store.integrationSettings,
         googleCalendarId: calendarId,
@@ -58,10 +65,30 @@ export async function PATCH(request: Request) {
       if (store.googleTokens?.refresh_token) {
         store.googleTokens = { ...store.googleTokens, calendarId };
       }
+
+      // 換日曆時清掉舊事件 ID，避免 patch 到錯誤日曆
+      if (calendarChanged) {
+        for (const leave of store.leaves) {
+          if (leave.googleEventId) delete leave.googleEventId;
+        }
+        for (const event of store.calendarEvents) {
+          if (event.googleEventId) delete event.googleEventId;
+        }
+      }
     }
 
     await saveStore(store);
-    return NextResponse.json({ ok: true });
+
+    let sync: { synced: number; skipped: number; errors: string[] } | null = null;
+    if (body.googleCalendarId !== undefined && (await isGoogleConnected())) {
+      sync = await syncCompanyCalendarToGoogle();
+    }
+
+    return NextResponse.json({
+      ok: true,
+      calendarChanged,
+      sync,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "儲存失敗";
     const status = message === "未登入" ? 401 : message === "需要管理員權限" ? 403 : 500;

@@ -63,7 +63,27 @@ export default function AdminIntegrationsPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "儲存失敗");
-      setMessage("整合設定已儲存");
+
+      if (json.sync) {
+        const { synced, errors } = json.sync as {
+          synced: number;
+          skipped: number;
+          errors: string[];
+        };
+        if (errors?.length) {
+          setMessage(
+            `設定已儲存；自動同步新增 ${synced} 筆，${errors.length} 筆失敗（請確認日曆權限）`
+          );
+        } else if (synced > 0) {
+          setMessage(`設定已儲存，並已自動同步 ${synced} 筆至 Google 日曆`);
+        } else {
+          setMessage("設定已儲存，並已自動核對同步 Google 日曆");
+        }
+      } else if (data?.google.connected === false) {
+        setMessage("整合設定已儲存（尚未連結 Google，請至行事曆頁連結後再同步）");
+      } else {
+        setMessage("整合設定已儲存");
+      }
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "儲存失敗");
@@ -123,7 +143,7 @@ export default function AdminIntegrationsPage() {
             Google 請假同步日曆
           </h3>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            管理員 OAuth 連結後，「同步請假」會寫入此日曆（非個人 primary 日曆）。
+            管理員 OAuth 連結後，儲存日曆 ID 會自動把請假／會議等同步寫入此日曆。
             請確認 Google Cloud 已啟用 <strong>Google Calendar API</strong>，且
             Netlify 已設定 <code className="text-xs">GOOGLE_CLIENT_ID</code>／
             <code className="text-xs">GOOGLE_CLIENT_SECRET</code>。
@@ -190,7 +210,7 @@ export default function AdminIntegrationsPage() {
             </a>
           </li>
           <li>OAuth 連結帳號需對指定日曆有「建立事件」權限</li>
-          <li>儲存日曆 ID 後，至行事曆頁按「同步請假」即可寫入新日曆</li>
+          <li>儲存日曆 ID 後會自動同步；亦可至行事曆頁手動再同步</li>
         </ul>
       </div>
     </div>

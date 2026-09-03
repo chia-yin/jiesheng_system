@@ -1,4 +1,5 @@
 import type { AggregatedCalendarEvent, CalendarEventType } from "@/types/system";
+import { formatEventDisplayTitle } from "@/lib/calendar-types";
 
 const CHIP_LIMIT = 2;
 
@@ -129,7 +130,8 @@ export function buildMonthCellDisplay(
   const chipCandidates: Array<MonthCellChip & { priority: number }> = [];
 
   for (const ev of onDate) {
-    const label = ev.type === "sprint" ? compactSprintLabel(ev) : ev.title;
+    const base = ev.type === "sprint" ? compactSprintLabel(ev) : ev.title;
+    const label = formatEventDisplayTitle(ev.type, base);
     chipCandidates.push({
       event: ev,
       label,

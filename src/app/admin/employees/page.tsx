@@ -73,7 +73,15 @@ export default function AdminEmployeesPage() {
 
     try {
       const payload = editing
-        ? { id: editing.id, ...form, ...(form.password ? { password: form.password } : {}) }
+        ? {
+            id: editing.id,
+            name: form.name,
+            department: form.department,
+            role: form.role,
+            username: form.username,
+            email: form.email,
+            ...(form.password ? { password: form.password } : {}),
+          }
         : form;
 
       const res = await fetch("/api/employees", {

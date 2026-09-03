@@ -150,7 +150,7 @@ async function handleStatus(employee: Employee): Promise<LineMessage> {
   if (!clockIn) {
     return {
       type: "text",
-      text: `📋 ${employee.name} 今日尚未上班打卡\n標準時間 ${settings.startTime}～${settings.endTime}`,
+      text: `${employee.name} 今日尚未上班打卡\n標準時間 ${settings.startTime}～${settings.endTime}`,
     };
   }
 
@@ -162,7 +162,7 @@ async function handleStatus(employee: Employee): Promise<LineMessage> {
   if (!clockOut) {
     return {
       type: "text",
-      text: `📋 ${employee.name} 今日狀態\n上班：${inTime}${clockIn.lateMinutes ? `（遲到 ${clockIn.lateMinutes} 分）` : ""}\n尚未下班打卡`,
+      text: `${employee.name} 今日狀態\n上班：${inTime}${clockIn.lateMinutes ? `（遲到 ${clockIn.lateMinutes} 分）` : ""}\n尚未下班打卡`,
     };
   }
 
@@ -173,7 +173,7 @@ async function handleStatus(employee: Employee): Promise<LineMessage> {
   });
   return {
     type: "text",
-    text: `📋 ${employee.name} 今日狀態\n上班：${inTime}\n下班：${outTime}`,
+    text: `${employee.name} 今日狀態\n上班：${inTime}\n下班：${outTime}`,
   };
 }
 

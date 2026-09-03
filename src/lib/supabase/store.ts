@@ -58,7 +58,7 @@ function employeeToRow(emp: Employee): EmployeeRow {
     department: emp.department,
     role: emp.role,
     username: emp.username,
-    password: emp.password,
+    password: emp.password ?? "",
     email: emp.email ?? null,
     google_id: emp.googleId ?? null,
     line_user_id: emp.lineUserId ?? null,
