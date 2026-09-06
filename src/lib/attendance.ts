@@ -54,9 +54,19 @@ function computeDayStatus(
   const earlyLeaveMinutes =
     clockOut?.earlyLeaveMinutes ??
     (clockOut ? calcEarlyLeaveMinutes(clockOut.timestamp, settings) : 0);
+  // 缺下班不累積工時，狀態標為 incomplete
+  if (!clockOut) {
+    return {
+      status: "incomplete",
+      workMinutes: 0,
+      lateMinutes,
+      earlyLeaveMinutes: 0,
+    };
+  }
+
   const workMinutes = calcWorkMinutes(
     clockIn.timestamp,
-    clockOut?.timestamp,
+    clockOut.timestamp,
     settings.breakMinutes
   );
 
@@ -130,6 +140,7 @@ export async function getMonthMarkers(
     let hasClock = false;
     let hasLate = false;
     let hasEarlyLeave = false;
+    let hasIncomplete = false;
     let clockedInCount = 0;
     let leaveCount = 0;
     const totalEmployees = employeeIds.size;
@@ -141,6 +152,7 @@ export async function getMonthMarkers(
         clockedInCount++;
         const late = clockIn.lateMinutes ?? calcLateMinutes(clockIn.timestamp, settings);
         if (late > 0) hasLate = true;
+        if (!clockOut) hasIncomplete = true;
       }
       if (clockOut) {
         const early =
@@ -159,6 +171,7 @@ export async function getMonthMarkers(
       hasLeave,
       hasLate,
       hasEarlyLeave,
+      hasIncomplete,
       ...(effectiveScope === "all"
         ? { clockedInCount, totalEmployees, leaveCount }
         : {}),

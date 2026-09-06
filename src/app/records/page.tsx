@@ -77,6 +77,7 @@ const STATUS_CONFIG: Record<
   early_leave: { label: "早退", chip: "chip-pending" },
   leave: { label: "請假", chip: "bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-2 py-0.5 rounded-full text-xs font-semibold" },
   absent: { label: "未打卡", chip: "bg-slate-50 text-slate-500 border border-slate-200/60 px-2 py-0.5 rounded-full text-xs font-semibold" },
+  incomplete: { label: "缺下班", chip: "bg-rose-50 text-rose-700 border border-rose-200/60 px-2 py-0.5 rounded-full text-xs font-semibold" },
 };
 
 const LEAVE_TYPE_LABEL: Record<string, string> = {
@@ -204,6 +205,7 @@ function DayMarkers({
 
 function getAnomalyClass(marker?: DayMarker) {
   if (!marker) return "";
+  if (marker.hasIncomplete) return "has-anomaly has-anomaly-incomplete";
   if (marker.hasLeave) return "has-anomaly has-anomaly-leave";
   if (marker.hasLate) return "has-anomaly has-anomaly-late";
   if (marker.hasEarlyLeave) return "has-anomaly has-anomaly-early";
@@ -851,11 +853,12 @@ function AllDayPanel({ detail, onRefresh }: { detail: AllDayDetail; onRefresh?: 
 
   const sorted = [...employees].sort((a, b) => {
     const order: Record<AttendanceDayStatus, number> = {
-      absent: 0,
-      late: 1,
-      early_leave: 2,
-      normal: 3,
-      leave: 4,
+      incomplete: 0,
+      absent: 1,
+      late: 2,
+      early_leave: 3,
+      normal: 4,
+      leave: 5,
     };
     return order[a.status] - order[b.status] || a.employeeName.localeCompare(b.employeeName, "zh-TW");
   });

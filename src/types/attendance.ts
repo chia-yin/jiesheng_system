@@ -71,7 +71,13 @@ export interface WeekAttendanceSummary {
 }
 
 /** 出勤日狀態（紀錄頁用） */
-export type AttendanceDayStatus = "normal" | "late" | "early_leave" | "leave" | "absent";
+export type AttendanceDayStatus =
+  | "normal"
+  | "late"
+  | "early_leave"
+  | "leave"
+  | "absent"
+  | "incomplete"; // 有上班、無下班
 
 /** 月曆日期標記 */
 export interface DayMarker {
@@ -79,6 +85,8 @@ export interface DayMarker {
   hasLeave: boolean;
   hasLate: boolean;
   hasEarlyLeave: boolean;
+  /** 有上班但缺下班 */
+  hasIncomplete?: boolean;
   /** 管理員全員視圖：當日已打卡人數 */
   clockedInCount?: number;
   /** 管理員全員視圖：員工總數 */

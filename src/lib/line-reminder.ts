@@ -24,13 +24,19 @@ export function isOnApprovedLeave(employeeId: string, dateKey: string, leaves: L
   );
 }
 
-export async function sendClockReminders(kind: "in" | "out"): Promise<{ sent: number; skipped: number }> {
+export async function sendClockReminders(kind: "in" | "out"): Promise<{
+  sent: number;
+  skipped: number;
+  errors: string[];
+  today: string;
+}> {
   const store = await getStore();
   const settings = getWorkSettings(store.workSettings);
   const today = getTaipeiDateKey();
+  const errors: string[] = [];
 
   if (isWeekendTaipei()) {
-    return { sent: 0, skipped: 0 };
+    return { sent: 0, skipped: 0, errors: ["週末不提醒"], today };
   }
 
   let sent = 0;
@@ -54,23 +60,36 @@ export async function sendClockReminders(kind: "in" | "out"): Promise<{ sent: nu
         skipped++;
         continue;
       }
-      await pushLineMessages(employee.lineUserId, [
-        buildReminderFlex("in", employee.name, settings.startTime),
-      ]);
-      sent++;
+      try {
+        await pushLineMessages(employee.lineUserId, [
+          buildReminderFlex("in", employee.name, settings.startTime),
+        ]);
+        sent++;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "推播失敗";
+        console.error(`[clock-reminder] in failed for ${employee.name}:`, message);
+        errors.push(`${employee.name}: ${message}`);
+      }
       continue;
     }
 
+    // 下班提醒：已上班且尚未下班
     if (!clockIn || clockOut) {
       skipped++;
       continue;
     }
 
-    await pushLineMessages(employee.lineUserId, [
-      buildReminderFlex("out", employee.name, settings.endTime),
-    ]);
-    sent++;
+    try {
+      await pushLineMessages(employee.lineUserId, [
+        buildReminderFlex("out", employee.name, settings.endTime),
+      ]);
+      sent++;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "推播失敗";
+      console.error(`[clock-reminder] out failed for ${employee.name}:`, message);
+      errors.push(`${employee.name}: ${message}`);
+    }
   }
 
-  return { sent, skipped };
+  return { sent, skipped, errors, today };
 }

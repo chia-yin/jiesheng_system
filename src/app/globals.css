@@ -745,6 +745,10 @@ body {
     --anomaly-color: #fbbf24;
   }
 
+  .records-cal-cell.has-anomaly-incomplete::before {
+    --anomaly-color: #e11d48;
+  }
+
   .records-cal-num {
     display: inline-flex;
     align-items: center;

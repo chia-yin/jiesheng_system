@@ -93,7 +93,21 @@ async function replyLine(replyToken: string, messages: LineMessage | LineMessage
 
 export async function pushLineMessages(lineUserId: string, messages: LineMessage | LineMessage[]): Promise<void> {
   const list = Array.isArray(messages) ? messages : [messages];
-  await postLineMessages(LINE_PUSH_URL, { to: lineUserId, messages: list });
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!token) throw new Error("LINE 未設定");
+
+  const res = await fetch(LINE_PUSH_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ to: lineUserId, messages: list }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`LINE push 失敗 (${res.status}): ${text.slice(0, 200)}`);
+  }
 }
 
 function formatTaipeiDateTime(iso: string): string {

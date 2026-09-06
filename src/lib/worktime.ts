@@ -82,16 +82,28 @@ export function calcEarlyLeaveMinutes(clockOutIso: string, settings: WorkSetting
   return Math.max(0, earliestAllowed - actual);
 }
 
+/** 完整上下班才計算工時；缺下班不累積（避免歷史日一直往後算） */
 export function calcWorkMinutes(
   clockIn?: string,
   clockOut?: string,
   breakMinutes = 60
 ): number {
-  if (!clockIn) return 0;
+  if (!clockIn || !clockOut) return 0;
   const start = new Date(clockIn).getTime();
-  const end = clockOut ? new Date(clockOut).getTime() : Date.now();
+  const end = new Date(clockOut).getTime();
   const gross = Math.max(0, Math.floor((end - start) / 60000));
-  return clockOut ? Math.max(0, gross - breakMinutes) : gross;
+  return Math.max(0, gross - breakMinutes);
+}
+
+/** 今日進行中：以上班時間算到現在（僅打卡頁即時顯示用） */
+export function calcLiveWorkMinutes(clockIn: string): number {
+  const start = new Date(clockIn).getTime();
+  return Math.max(0, Math.floor((Date.now() - start) / 60000));
+}
+
+/** ISO timestamp → 台北 YYYY-MM-DD */
+export function getTaipeiDateFromIso(iso: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date(iso));
 }
 
 export function needsBreakReminder(workMinutes: number): boolean {
@@ -100,7 +112,7 @@ export function needsBreakReminder(workMinutes: number): boolean {
 
 export function getDayRecords(records: AttendanceRecord[], employeeId: string, date: string) {
   const dayRecords = records
-    .filter((r) => r.employeeId === employeeId && r.timestamp.startsWith(date))
+    .filter((r) => r.employeeId === employeeId && getTaipeiDateFromIso(r.timestamp) === date)
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
   const clockIn = dayRecords.find((r) => r.type === "in");
@@ -112,10 +124,17 @@ export function getDayRecords(records: AttendanceRecord[], employeeId: string, d
 export async function getEmployeeAttendanceSummary(employeeId: string, date?: string) {
   const store = await getStore();
   const settings = getWorkSettings(store.workSettings);
-  const targetDate = date ?? new Date().toISOString().slice(0, 10);
+  const targetDate =
+    date ??
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Taipei" }).format(new Date());
 
   const { clockIn, clockOut } = getDayRecords(store.records, employeeId, targetDate);
-  const workMinutes = calcWorkMinutes(clockIn?.timestamp, clockOut?.timestamp, settings.breakMinutes);
+  const workMinutes =
+    clockIn && clockOut
+      ? calcWorkMinutes(clockIn.timestamp, clockOut.timestamp, settings.breakMinutes)
+      : clockIn && !clockOut
+        ? calcLiveWorkMinutes(clockIn.timestamp)
+        : 0;
 
   let status: "not_started" | "working" | "finished" = "not_started";
   if (clockIn && !clockOut) status = "working";
