@@ -16,6 +16,6 @@ async function trigger(kind: "in" | "out") {
 export default async () => trigger("in");
 
 export const config = {
-  /** 週一至五 09:05 台北（UTC 01:05） */
-  schedule: "5 1 * * 1-5",
+  /** 週一至五 08:30 台北（UTC 00:30） */
+  schedule: "30 0 * * 1-5",
 };
