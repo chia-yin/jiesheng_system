@@ -94,13 +94,16 @@ export function buildClockResultFlex(
   };
 }
 
-/** 上下班提醒推播 */
+/** 上下班提醒推播（含一鍵打卡按鈕） */
 export function buildReminderFlex(type: "in" | "out", employeeName: string, timeLabel: string): LineMessage {
   const title = type === "in" ? "記得上班打卡" : "記得下班打卡";
   const hint =
     type === "in"
       ? `您好 ${employeeName}，已過標準上班時間（${timeLabel}），請記得打卡。`
       : `您好 ${employeeName}，已過標準下班時間（${timeLabel}），請記得打卡。`;
+  const clockLabel = type === "in" ? "上班打卡" : "下班打卡";
+  const clockText = type === "in" ? "上班" : "下班";
+  const buttonColor = type === "in" ? "#059669" : "#2563eb";
 
   return {
     type: "flex",
@@ -122,7 +125,7 @@ export function buildReminderFlex(type: "in" | "out", employeeName: string, time
           { type: "text", text: hint, wrap: true, size: "sm", color: "#64748b", margin: "md" },
           {
             type: "text",
-            text: "回覆「上班」或「下班」即可打卡",
+            text: `也可直接回覆「${clockText}」打卡`,
             size: "xs",
             color: "#94a3b8",
             margin: "md",
@@ -132,7 +135,21 @@ export function buildReminderFlex(type: "in" | "out", employeeName: string, time
       footer: {
         type: "box",
         layout: "vertical",
-        contents: [siteButton()],
+        spacing: "sm",
+        contents: [
+          {
+            type: "button",
+            style: "primary",
+            height: "sm",
+            color: buttonColor,
+            action: {
+              type: "message",
+              label: clockLabel,
+              text: clockText,
+            },
+          },
+          siteButton(),
+        ],
       },
     },
   };
