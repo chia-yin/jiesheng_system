@@ -17,6 +17,11 @@ const PUBLIC_PATHS = [
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Netlify Scheduled Functions 入口；若被導向登入，排程永遠不會執行
+  if (pathname.startsWith("/.netlify/")) {
+    return NextResponse.next();
+  }
+
   // 靜態資源（CSS/JS/圖片）一律放行，避免樣式被攔截
   if (
     pathname.startsWith("/_next/static") ||
@@ -53,5 +58,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|\\.netlify).*)"],
 };

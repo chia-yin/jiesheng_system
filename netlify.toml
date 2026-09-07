@@ -9,5 +9,6 @@
 
 # 打卡提醒排程（Netlify Scheduled Functions）
 #   上班提醒：週一～五 08:30 台北（UTC 00:30）→ clock-reminder-in
-#   下班提醒：週一～五 18:00 台北（UTC 10:00）→ clock-reminder-out
+#   下班提醒：週一～五 18:05 台北（UTC 10:05）→ clock-reminder-out
 # 週末／已請假／已打卡者由 API 內部略過
+# 注意：middleware 必須放行 /.netlify/，否則排程會被導向登入頁而失敗
