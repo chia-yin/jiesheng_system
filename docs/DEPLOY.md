@@ -47,6 +47,8 @@ npm run migrate:supabase
 | `SUPABASE_URL` | Supabase Project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role（僅 server 使用） |
 | `SESSION_SECRET` | 隨機長字串（session 簽章） |
+| `CRON_SECRET` | 打卡提醒排程用（隨機長字串） |
+| `GEMINI_API_KEY` | Sprint「快速建立」AI 解析（選用） |
 | `GOOGLE_*` | 若需 Google 行事曆同步 |
 
 4. 部署完成後，以預設帳號登入測試（admin / admin123）
