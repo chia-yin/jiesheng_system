@@ -51,8 +51,6 @@ const STATUS_LABEL: Record<SprintStatus, string> = {
   completed: "已完成",
 };
 
-const DRAG_THRESHOLD = 8;
-
 type SpeechRecognitionLike = {
   lang: string;
   continuous: boolean;
@@ -96,6 +94,8 @@ export default function SprintsPage() {
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
   const [dragTaskId, setDragTaskId] = useState<string | null>(null);
+  const dragTaskIdRef = useRef<string | null>(null);
+  const suppressClickRef = useRef(false);
 
   const [detailTask, setDetailTask] = useState<SprintTask | null>(null);
   const [detailSaving, setDetailSaving] = useState(false);
@@ -114,13 +114,6 @@ export default function SprintsPage() {
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speechSupported = useMemo(() => Boolean(getSpeechRecognition()), []);
-
-  const pointerRef = useRef<{
-    taskId: string | null;
-    x: number;
-    y: number;
-    dragged: boolean;
-  }>({ taskId: null, x: 0, y: 0, dragged: false });
 
   const isAdmin = user?.role === "admin";
 
@@ -383,45 +376,42 @@ export default function SprintsPage() {
     }
   }
 
-  function onCardPointerDown(e: React.PointerEvent, task: SprintTask) {
-    if ((e.target as HTMLElement).closest("[data-no-card-click]")) return;
-    pointerRef.current = {
-      taskId: task.id,
-      x: e.clientX,
-      y: e.clientY,
-      dragged: false,
-    };
-  }
-
-  function onCardPointerMove(e: React.PointerEvent, task: SprintTask) {
-    const p = pointerRef.current;
-    if (p.taskId !== task.id || p.dragged) return;
-    const dx = e.clientX - p.x;
-    const dy = e.clientY - p.y;
-    if (Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
-      p.dragged = true;
+  function onCardClick(task: SprintTask) {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
     }
+    openDetail(task);
   }
 
-  function onCardPointerUp(task: SprintTask) {
-    const p = pointerRef.current;
-    if (p.taskId !== task.id) return;
-    if (!p.dragged) {
-      openDetail(task);
+  function onDragStart(e: React.DragEvent, task: SprintTask) {
+    if (!canDrag(task)) {
+      e.preventDefault();
+      return;
     }
-    pointerRef.current = { taskId: null, x: 0, y: 0, dragged: false };
-  }
-
-  function onDragStart(task: SprintTask) {
-    if (!canDrag(task)) return;
-    pointerRef.current.dragged = true;
+    suppressClickRef.current = true;
+    dragTaskIdRef.current = task.id;
     setDragTaskId(task.id);
+    e.dataTransfer.setData("text/plain", task.id);
+    e.dataTransfer.effectAllowed = "move";
   }
 
-  function onDropColumn(status: TaskStatus) {
-    if (!dragTaskId) return;
-    const task = board?.tasks.find((t) => t.id === dragTaskId);
+  function onDragEnd() {
+    dragTaskIdRef.current = null;
     setDragTaskId(null);
+    // 拖曳結束後短暫抑制 click，避免放開滑鼠時誤開詳情
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 50);
+  }
+
+  function onDropColumn(e: React.DragEvent, status: TaskStatus) {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData("text/plain") || dragTaskIdRef.current;
+    dragTaskIdRef.current = null;
+    setDragTaskId(null);
+    if (!taskId) return;
+    const task = board?.tasks.find((t) => t.id === taskId);
     if (!task || task.status === status) return;
     if (!canDrag(task)) {
       showToast("只能拖動自己負責的任務");
@@ -653,8 +643,11 @@ export default function SprintsPage() {
               <div
                 key={col.value}
                 className="min-h-[220px] rounded-xl border border-[var(--line)] bg-slate-50/80 p-2"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => onDropColumn(col.value)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(e) => onDropColumn(e, col.value)}
               >
                 <p className="mb-2 px-1 text-[11px] font-bold tracking-wide text-[var(--muted)]">
                   {col.label}
@@ -664,18 +657,21 @@ export default function SprintsPage() {
                   {tasksByStatus[col.value].map((task) => (
                     <div
                       key={task.id}
+                      role="button"
+                      tabIndex={0}
                       draggable={canDrag(task)}
-                      onPointerDown={(e) => onCardPointerDown(e, task)}
-                      onPointerMove={(e) => onCardPointerMove(e, task)}
-                      onPointerUp={() => onCardPointerUp(task)}
-                      onPointerCancel={() => {
-                        pointerRef.current = { taskId: null, x: 0, y: 0, dragged: false };
+                      onClick={() => onCardClick(task)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onCardClick(task);
+                        }
                       }}
-                      onDragStart={() => onDragStart(task)}
-                      onDragEnd={() => setDragTaskId(null)}
+                      onDragStart={(e) => onDragStart(e, task)}
+                      onDragEnd={onDragEnd}
                       className={`select-none rounded-lg border border-[var(--line)] bg-white p-2.5 shadow-sm transition hover:border-[var(--primary)]/30 ${
                         canDrag(task) ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
-                      } ${dragTaskId === task.id ? "opacity-60" : ""}`}
+                      } ${dragTaskId === task.id ? "opacity-60 ring-2 ring-[var(--primary)]/30" : ""}`}
                     >
                       <p className="text-sm font-medium text-[var(--ink)]">{task.title}</p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--muted)]">
@@ -684,7 +680,6 @@ export default function SprintsPage() {
                           data-no-card-click
                           className="inline-flex items-center gap-0.5 hover:text-[var(--primary)]"
                           onClick={(e) => e.stopPropagation()}
-                          onPointerDown={(e) => e.stopPropagation()}
                         >
                           <FolderKanban className="h-3 w-3" />
                           {task.projectName}
@@ -700,7 +695,6 @@ export default function SprintsPage() {
                             e.stopPropagation();
                             removeTask(task.id);
                           }}
-                          onPointerDown={(e) => e.stopPropagation()}
                         >
                           <Trash2 className="h-3 w-3" />
                           移出 Sprint
@@ -713,7 +707,7 @@ export default function SprintsPage() {
             ))}
           </div>
           <p className="text-[11px] text-[var(--faint)]">
-            輕點卡片查看詳情；按住拖曳可改狀態（{TASK_STATUS_OPTIONS.map((s) => s.label).join(" / ")}）
+            點一下卡片查看詳情；按住拖到其他欄位可改狀態（{TASK_STATUS_OPTIONS.map((s) => s.label).join(" / ")}）
           </p>
         </section>
       )}
