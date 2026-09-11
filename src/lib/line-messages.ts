@@ -99,8 +99,8 @@ export function buildReminderFlex(type: "in" | "out", employeeName: string, time
   const title = type === "in" ? "記得上班打卡" : "記得下班打卡";
   const hint =
     type === "in"
-      ? `您好 ${employeeName}，已過標準上班時間（${timeLabel}），請記得打卡。`
-      : `您好 ${employeeName}，已過標準下班時間（${timeLabel}），請記得打卡。`;
+      ? `您好 ${employeeName}，標準上班時間為 ${timeLabel}，請記得打卡。`
+      : `您好 ${employeeName}，標準下班時間為 ${timeLabel}，請記得打卡。`;
   const clockLabel = type === "in" ? "上班打卡" : "下班打卡";
   const clockText = type === "in" ? "上班" : "下班";
   const buttonColor = type === "in" ? "#059669" : "#2563eb";
