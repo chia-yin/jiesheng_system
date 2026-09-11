@@ -10,7 +10,11 @@ export async function GET(_request: Request, context: Ctx) {
     const { id } = await context.params;
     const board = await getSprintBoard(id);
     if (!board) return NextResponse.json({ error: "找不到 Sprint" }, { status: 404 });
-    return NextResponse.json(board);
+    return NextResponse.json(board, {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "讀取失敗";
     const status = message === "未登入" ? 401 : 500;

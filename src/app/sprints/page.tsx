@@ -129,7 +129,7 @@ export default function SprintsPage() {
   }, []);
 
   const loadBoard = useCallback(async (id: string) => {
-    const res = await fetch(`/api/sprints/${id}`);
+    const res = await fetch(`/api/sprints/${id}`, { cache: "no-store" });
     const data = await res.json();
     if (res.ok) setBoard(data);
   }, []);
@@ -292,18 +292,36 @@ export default function SprintsPage() {
 
   async function updateStatus(taskId: string, status: TaskStatus) {
     if (!selectedId) return;
+
+    // 先樂觀更新畫面，避免等重新載入／快取造成拖曳後看不到結果
+    const previous = board;
+    setBoard((prev) => {
+      if (!prev) return prev;
+      const tasks = prev.tasks.map((t) =>
+        t.id === taskId ? { ...t, status, updatedAt: new Date().toISOString() } : t
+      );
+      return {
+        ...prev,
+        tasks,
+        done: tasks.filter((t) => t.status === "done").length,
+        total: tasks.length,
+      };
+    });
+    setDetailTask((prev) => (prev?.id === taskId ? { ...prev, status } : prev));
+
     const res = await fetch(`/api/sprints/${selectedId}/tasks`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ taskId, status }),
+      cache: "no-store",
     });
     if (!res.ok) {
       const data = await res.json();
+      setBoard(previous);
       showToast(data.error ?? "無法更新狀態");
       return;
     }
     await loadBoard(selectedId);
-    setDetailTask((prev) => (prev?.id === taskId ? { ...prev, status } : prev));
   }
 
   async function removeTask(taskId: string) {
