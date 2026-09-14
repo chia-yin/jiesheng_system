@@ -106,6 +106,17 @@ export default function SprintsPage() {
   const [detailAssigneeId, setDetailAssigneeId] = useState("");
   const [detailDueDate, setDetailDueDate] = useState("");
 
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const [createTaskSaving, setCreateTaskSaving] = useState(false);
+  const [newProjectId, setNewProjectId] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newAssigneeId, setNewAssigneeId] = useState("");
+  const [newPriority, setNewPriority] = useState<TaskPriority>("medium");
+  const [newStatus, setNewStatus] = useState<TaskStatus>("backlog");
+  const [newDueDate, setNewDueDate] = useState("");
+  const [newAddToSprint, setNewAddToSprint] = useState(true);
+
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickText, setQuickText] = useState("");
   const [quickParsing, setQuickParsing] = useState(false);
@@ -438,6 +449,48 @@ export default function SprintsPage() {
     updateStatus(task.id, status);
   }
 
+  function openCreateTaskModal() {
+    setNewProjectId(projects[0]?.id ?? "");
+    setNewTitle("");
+    setNewDescription("");
+    setNewAssigneeId("");
+    setNewPriority("medium");
+    setNewStatus("backlog");
+    setNewDueDate("");
+    setNewAddToSprint(true);
+    setCreateTaskOpen(true);
+  }
+
+  async function handleCreateTask(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newProjectId || !newTitle.trim() || createTaskSaving) return;
+    setCreateTaskSaving(true);
+    try {
+      const res = await fetch(`/api/projects/${newProjectId}/tasks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          description: newDescription.trim() || undefined,
+          assigneeId: newAssigneeId || undefined,
+          priority: newPriority,
+          status: newStatus,
+          dueDate: newDueDate || undefined,
+          sprintId: newAddToSprint && selectedId ? selectedId : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "建立失敗");
+      showToast(newAddToSprint ? "任務已建立並加入本週 Sprint" : "任務已建立");
+      setCreateTaskOpen(false);
+      if (selectedId && newAddToSprint) await loadBoard(selectedId);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "建立失敗");
+    } finally {
+      setCreateTaskSaving(false);
+    }
+  }
+
   function openQuickCreate() {
     setQuickText("");
     setQuickDrafts([]);
@@ -643,6 +696,10 @@ export default function SprintsPage() {
               )}
               {isAdmin && (
                 <>
+                  <button type="button" className="btn-secondary gap-1 px-2.5 py-1.5 text-xs" onClick={openCreateTaskModal}>
+                    <Plus className="h-3 w-3" />
+                    新建任務
+                  </button>
                   <button type="button" className="btn-secondary gap-1 px-2.5 py-1.5 text-xs" onClick={openQuickCreate}>
                     <Sparkles className="h-3 w-3" />
                     快速建立
@@ -848,6 +905,117 @@ export default function SprintsPage() {
             )}
           </form>
         )}
+      </Modal>
+
+      <Modal
+        open={createTaskOpen}
+        onClose={() => setCreateTaskOpen(false)}
+        title="新建任務"
+        footer={
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setCreateTaskOpen(false)} disabled={createTaskSaving}>
+              取消
+            </button>
+            <button type="submit" form="sprint-create-task" className="btn-primary" disabled={createTaskSaving || !newProjectId || !newTitle.trim()}>
+              {createTaskSaving ? "建立中…" : "建立"}
+            </button>
+          </>
+        }
+      >
+        <form id="sprint-create-task" onSubmit={handleCreateTask} className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">專案</label>
+            <select
+              className="input-field w-full text-sm"
+              value={newProjectId}
+              onChange={(e) => setNewProjectId(e.target.value)}
+              required
+            >
+              <option value="">選擇專案</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">標題</label>
+            <input
+              className="input-field w-full"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="任務標題"
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">說明（選填）</label>
+            <textarea
+              className="input-field min-h-[72px] w-full"
+              value={newDescription}
+              onChange={(e) => setNewDescription(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">狀態</label>
+              <select
+                className="input-field w-full text-sm"
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value as TaskStatus)}
+              >
+                {TASK_STATUS_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">優先級</label>
+              <select
+                className="input-field w-full text-sm"
+                value={newPriority}
+                onChange={(e) => setNewPriority(e.target.value as TaskPriority)}
+              >
+                {TASK_PRIORITY_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">負責人</label>
+              <select
+                className="input-field w-full text-sm"
+                value={newAssigneeId}
+                onChange={(e) => setNewAssigneeId(e.target.value)}
+              >
+                <option value="">未指派</option>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-[var(--muted)]">到期日</label>
+              <input
+                type="date"
+                className="input-field w-full text-sm"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-[var(--ink)]">
+            <input type="checkbox" checked={newAddToSprint} onChange={(e) => setNewAddToSprint(e.target.checked)} />
+            建立後加入本週 Sprint
+          </label>
+        </form>
       </Modal>
 
       <Modal

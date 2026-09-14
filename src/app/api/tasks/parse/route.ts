@@ -22,6 +22,8 @@ function extractJson(text: string): unknown {
   return JSON.parse(raw);
 }
 
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-3.6-flash";
+
 async function callGemini(prompt: string): Promise<string> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) {
@@ -29,7 +31,7 @@ async function callGemini(prompt: string): Promise<string> {
   }
 
   const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`;
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(key)}`;
 
   const res = await fetch(url, {
     method: "POST",
@@ -37,7 +39,6 @@ async function callGemini(prompt: string): Promise<string> {
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.2,
         responseMimeType: "application/json",
       },
     }),
