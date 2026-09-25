@@ -17,6 +17,7 @@ const TITLES: Record<string, string> = {
   "/sprints": "本週 Sprint",
   "/calendar": "公司行事曆",
   "/admin/employees": "員工管理",
+  "/admin/holidays": "休假日設定",
   "/admin/integrations": "整合設定",
 };
 

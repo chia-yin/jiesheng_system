@@ -29,6 +29,7 @@
 - [x] Supabase 資料層 + 遷移腳本（階段 1）
 - [x] LINE Webhook 打卡 + 綁定（階段 2）
 - [x] Supabase Auth 雙通道登入（階段 3，選用）
+- [x] 打卡提醒：國定假日＋公司休假／補班覆寫
 
 ## 待完成
 
@@ -107,3 +108,4 @@ npm run sync:supabase-auth # 員工同步至 Supabase Auth
 | GET | `/api/auth/google` | Google OAuth 起始（admin） |
 | POST | `/api/bot/line` | LINE Webhook（公開，簽章驗證） |
 | GET/POST/DELETE | `/api/line/bind` | LINE 綁定狀態 / 產生綁定碼 / 解除綁定 |
+| GET/POST/DELETE | `/api/admin/company-calendar` | 公司休假／補班覆寫（admin） |

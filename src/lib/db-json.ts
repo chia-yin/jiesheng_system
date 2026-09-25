@@ -22,6 +22,7 @@ export const DEFAULT_WORK_SETTINGS: WorkSettings = {
   breakMinutes: 60,
   flexBeforeMinutes: 60,
   flexAfterMinutes: 60,
+  companyCalendarDays: [],
 };
 
 export const DEFAULT_STORE: SystemStore = {
@@ -189,6 +190,7 @@ export function normalizeStore(store: SystemStore): SystemStore {
   } else {
     if (store.workSettings.flexBeforeMinutes == null) store.workSettings.flexBeforeMinutes = 60;
     if (store.workSettings.flexAfterMinutes == null) store.workSettings.flexAfterMinutes = 60;
+    if (!store.workSettings.companyCalendarDays) store.workSettings.companyCalendarDays = [];
   }
   return store;
 }

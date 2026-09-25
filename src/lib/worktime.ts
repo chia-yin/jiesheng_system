@@ -7,6 +7,7 @@ const DEFAULT_WORK_SETTINGS: WorkSettings = {
   breakMinutes: 60,
   flexBeforeMinutes: 60,
   flexAfterMinutes: 60,
+  companyCalendarDays: [],
 };
 
 function parseTimeToMinutes(time: string): number {
@@ -43,6 +44,7 @@ export function getWorkSettings(settings?: WorkSettings): WorkSettings {
     ...settings,
     flexBeforeMinutes: settings?.flexBeforeMinutes ?? DEFAULT_WORK_SETTINGS.flexBeforeMinutes,
     flexAfterMinutes: settings?.flexAfterMinutes ?? DEFAULT_WORK_SETTINGS.flexAfterMinutes,
+    companyCalendarDays: settings?.companyCalendarDays ?? [],
   };
 }
 

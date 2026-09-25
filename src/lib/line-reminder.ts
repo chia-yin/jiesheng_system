@@ -1,6 +1,7 @@
 import { getStore } from "@/lib/db";
 import { pushLineMessages } from "@/lib/line";
 import { buildReminderFlex } from "@/lib/line-messages";
+import { resolveWorkDay } from "@/lib/work-calendar";
 import { getDayRecords, getWorkSettings } from "@/lib/worktime";
 import type { LeaveRequest } from "@/types/system";
 
@@ -34,9 +35,17 @@ export async function sendClockReminders(kind: "in" | "out"): Promise<{
   const settings = getWorkSettings(store.workSettings);
   const today = getTaipeiDateKey();
   const errors: string[] = [];
+  const companyDays = store.workSettings?.companyCalendarDays ?? [];
+  const day = resolveWorkDay(today, companyDays);
 
-  if (isWeekendTaipei()) {
-    return { sent: 0, skipped: 0, errors: ["週末不提醒"], today };
+  if (!day.isWorkday) {
+    const label =
+      day.reason === "company_holiday"
+        ? `公司放假不提醒（${day.label ?? today}）`
+        : day.reason === "taiwan_holiday"
+          ? `國定假日不提醒（${day.label ?? today}）`
+          : "週末不提醒";
+    return { sent: 0, skipped: 0, errors: [label], today };
   }
 
   let sent = 0;

@@ -48,6 +48,8 @@ export interface WorkSettings {
   flexBeforeMinutes?: number;
   /** 上班後彈性分鐘數（如 60 = 可延後 1 小時打卡不算遲到） */
   flexAfterMinutes?: number;
+  /** 公司自訂休假／補班日（與 system.WorkSettings 同步） */
+  companyCalendarDays?: import("@/types/system").CompanyCalendarDay[];
 }
 
 export interface DayAttendanceSummary {

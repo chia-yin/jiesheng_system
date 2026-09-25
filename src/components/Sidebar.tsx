@@ -19,6 +19,7 @@ import {
   Rocket,
   Settings,
   Users,
+  CalendarDays,
 } from "lucide-react";
 import type { SessionUser } from "@/types/auth";
 
@@ -58,6 +59,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "管理",
     items: [
       { href: "/admin/employees", label: "員工管理", icon: Users, adminOnly: true },
+      { href: "/admin/holidays", label: "休假日設定", icon: CalendarDays, adminOnly: true },
       { href: "/admin/integrations", label: "整合設定", icon: Plug, adminOnly: true },
     ],
   },

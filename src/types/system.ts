@@ -144,12 +144,23 @@ export interface AggregatedCalendarEvent extends CalendarEvent {
   sprintId?: string;
 }
 
+/** 公司自訂放假／補班（覆寫國定假日與週末） */
+export interface CompanyCalendarDay {
+  /** YYYY-MM-DD */
+  date: string;
+  /** holiday=放假不提醒；workday=補班仍提醒 */
+  kind: "holiday" | "workday";
+  name: string;
+}
+
 export interface WorkSettings {
   startTime: string;
   endTime: string;
   breakMinutes: number;
   flexBeforeMinutes?: number;
   flexAfterMinutes?: number;
+  /** 公司自訂休假／補班日 */
+  companyCalendarDays?: CompanyCalendarDay[];
 }
 
 export interface SystemStore {
