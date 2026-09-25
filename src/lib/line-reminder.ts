@@ -1,6 +1,7 @@
 import { getStore } from "@/lib/db";
 import { pushLineMessages } from "@/lib/line";
 import { buildReminderFlex } from "@/lib/line-messages";
+import { sendSprintTaskDigest } from "@/lib/sprint-line-digest";
 import { resolveWorkDay } from "@/lib/work-calendar";
 import { getDayRecords, getWorkSettings } from "@/lib/worktime";
 import type { LeaveRequest } from "@/types/system";
@@ -28,6 +29,8 @@ export function isOnApprovedLeave(employeeId: string, dateKey: string, leaves: L
 export async function sendClockReminders(kind: "in" | "out"): Promise<{
   sent: number;
   skipped: number;
+  digestSent: number;
+  digestSkipped: number;
   errors: string[];
   today: string;
 }> {
@@ -45,11 +48,13 @@ export async function sendClockReminders(kind: "in" | "out"): Promise<{
         : day.reason === "taiwan_holiday"
           ? `國定假日不提醒（${day.label ?? today}）`
           : "週末不提醒";
-    return { sent: 0, skipped: 0, errors: [label], today };
+    return { sent: 0, skipped: 0, digestSent: 0, digestSkipped: 0, errors: [label], today };
   }
 
   let sent = 0;
   let skipped = 0;
+  let digestSent = 0;
+  let digestSkipped = 0;
 
   for (const employee of store.employees) {
     if (!employee.lineUserId) {
@@ -63,42 +68,57 @@ export async function sendClockReminders(kind: "in" | "out"): Promise<{
     }
 
     const { clockIn, clockOut } = getDayRecords(store.records, employee.id, today);
+    let clockPushed = false;
 
     if (kind === "in") {
-      if (clockIn) {
-        skipped++;
-        continue;
+      if (!clockIn) {
+        try {
+          await pushLineMessages(employee.lineUserId, [
+            buildReminderFlex("in", employee.name, settings.startTime),
+          ]);
+          sent++;
+          clockPushed = true;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "推播失敗";
+          console.error(`[clock-reminder] in failed for ${employee.name}:`, message);
+          errors.push(`${employee.name}: ${message}`);
+        }
       }
+    } else if (clockIn && !clockOut) {
       try {
         await pushLineMessages(employee.lineUserId, [
-          buildReminderFlex("in", employee.name, settings.startTime),
+          buildReminderFlex("out", employee.name, settings.endTime),
         ]);
         sent++;
+        clockPushed = true;
       } catch (error) {
         const message = error instanceof Error ? error.message : "推播失敗";
-        console.error(`[clock-reminder] in failed for ${employee.name}:`, message);
+        console.error(`[clock-reminder] out failed for ${employee.name}:`, message);
         errors.push(`${employee.name}: ${message}`);
       }
-      continue;
     }
 
-    // 下班提醒：已上班且尚未下班
-    if (!clockIn || clockOut) {
+    if (!clockPushed) {
       skipped++;
-      continue;
     }
 
+    // 即使已打卡略過打卡推播，仍推 Sprint 任務摘要
     try {
-      await pushLineMessages(employee.lineUserId, [
-        buildReminderFlex("out", employee.name, settings.endTime),
-      ]);
-      sent++;
+      const result = await sendSprintTaskDigest({
+        lineUserId: employee.lineUserId,
+        employeeId: employee.id,
+        employeeName: employee.name,
+        kind,
+      });
+      if (result === "sent") digestSent++;
+      else digestSkipped++;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "推播失敗";
-      console.error(`[clock-reminder] out failed for ${employee.name}:`, message);
-      errors.push(`${employee.name}: ${message}`);
+      const message = error instanceof Error ? error.message : "任務摘要推播失敗";
+      console.error(`[sprint-digest] failed for ${employee.name}:`, message);
+      errors.push(`${employee.name} 任務摘要: ${message}`);
+      digestSkipped++;
     }
   }
 
-  return { sent, skipped, errors, today };
+  return { sent, skipped, digestSent, digestSkipped, errors, today };
 }

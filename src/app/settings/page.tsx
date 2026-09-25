@@ -366,7 +366,7 @@ export default function SettingsPage() {
                 LINE 打卡綁定
               </h3>
               <p className={styles.formDesc}>
-                綁定後可在 LINE 以圖文卡片打卡，並收到上下班提醒（週末、國定假日、公司放假與請假期間不提醒；公司補班日仍會提醒）。
+                綁定後可在 LINE 以圖文卡片打卡，並收到上下班提醒（週末、國定假日、公司放假與請假期間不提醒；公司補班日仍會提醒）。工作日提醒會附帶本週 Sprint 指派任務，可一鍵改狀態。
               </p>
 
               <div className={styles.lineSteps}>

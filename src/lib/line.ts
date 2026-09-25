@@ -4,11 +4,15 @@ import { clockInOut, makeupClock } from "@/lib/attendance";
 import { getStore, saveStore } from "@/lib/db";
 import {
   buildClockResultFlex,
+  buildTaskStatusResultFlex,
   buildWelcomeFlex,
   type LineMessage,
 } from "@/lib/line-messages";
+import { updateSprintTaskStatus } from "@/lib/sprints";
 import { getDayRecords, getWorkSettings } from "@/lib/worktime";
 import type { Employee } from "@/types/attendance";
+import type { SessionUser } from "@/types/auth";
+import type { TaskStatus } from "@/types/system";
 
 const LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply";
 const LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push";
@@ -276,6 +280,44 @@ function normalizeCommand(text: string): string {
   return text.trim().toLowerCase();
 }
 
+const TASK_STATUS_CMD = /^任務狀態\s+(\S+)\s+(todo|in_progress|review|done)$/i;
+
+function employeeToSession(employee: Employee): SessionUser {
+  return {
+    id: employee.id,
+    username: employee.username,
+    name: employee.name,
+    role: employee.role,
+    employeeId: employee.id,
+    department: employee.department,
+  };
+}
+
+async function handleTaskStatus(employee: Employee, text: string): Promise<LineMessage> {
+  const match = text.trim().match(TASK_STATUS_CMD);
+  if (!match) {
+    return {
+      type: "text",
+      text: "格式：任務狀態 <任務ID> <todo|in_progress|review|done>",
+    };
+  }
+  const taskId = match[1];
+  const status = match[2].toLowerCase() as TaskStatus;
+
+  try {
+    const updated = await updateSprintTaskStatus(taskId, status, employeeToSession(employee));
+    const store = await getStore();
+    const projectName = store.projects.find((p) => p.id === updated.projectId)?.name ?? "專案";
+    return buildTaskStatusResultFlex({
+      title: updated.title,
+      projectName,
+      status: updated.status,
+    });
+  } catch (err) {
+    return { type: "text", text: err instanceof Error ? err.message : "更新任務失敗" };
+  }
+}
+
 export async function handleLineWebhookEvents(events: LineWebhookEvent[]): Promise<void> {
   for (const event of events) {
     if (event.type !== "message" || event.message?.type !== "text") continue;
@@ -313,6 +355,11 @@ export async function handleLineWebhookEvents(events: LineWebhookEvent[]): Promi
       continue;
     }
 
+    if (TASK_STATUS_CMD.test(text)) {
+      await replyLine(event.replyToken, await handleTaskStatus(employee, text));
+      continue;
+    }
+
     if (cmd === "狀態" || cmd === "status") {
       await replyLine(event.replyToken, await handleStatus(employee));
       continue;
@@ -325,7 +372,7 @@ export async function handleLineWebhookEvents(events: LineWebhookEvent[]): Promi
 
     await replyLine(event.replyToken, {
       type: "text",
-      text: "不認識的指令。\n可用指令：\n上班 / 下班 / 狀態\n補上班 HH:MM\n補下班 HH:MM\n補上班 HH:MM YYYY-MM-DD",
+      text: "不認識的指令。\n可用指令：\n上班 / 下班 / 狀態\n補上班 HH:MM\n補下班 HH:MM\n補上班 HH:MM YYYY-MM-DD\n（Sprint 任務請點提醒卡片上的狀態按鈕）",
     });
   }
 }

@@ -1,4 +1,5 @@
 import { getAppUrl, getLogoUrl } from "@/lib/app-url";
+import type { TaskStatus } from "@/types/system";
 
 export type LineMessage = Record<string, unknown>;
 
@@ -19,7 +20,7 @@ function siteButton(label = "前往系統", path = "") {
 export function buildWelcomeFlex(name: string, bound = true): LineMessage {
   const title = bound ? "LINE 綁定成功" : "杰勝考勤 Bot";
   const desc = bound
-    ? `${name}，您已可在此打卡。\n\n指令：上班、下班、狀態`
+    ? `${name}，您已可在此打卡。\n\n指令：上班、下班、狀態\n工作日提醒會附帶本週 Sprint 任務，可點按鈕改狀態`
     : "請至網站「帳號設定 → LINE 綁定」產生 6 位數綁定碼，再傳送至此。";
 
   return {
@@ -266,6 +267,256 @@ export function buildLeaveApplicationFlex(input: {
         layout: "vertical",
         spacing: "sm",
         contents: [siteButton("開啟請假審核", "/leave?tab=pending")],
+      },
+    },
+  };
+}
+
+const SPRINT_STATUS_BUTTONS: { value: TaskStatus; label: string; color: string }[] = [
+  { value: "todo", label: "待辦", color: "#64748b" },
+  { value: "in_progress", label: "進行中", color: "#2563eb" },
+  { value: "review", label: "審核", color: "#d97706" },
+  { value: "done", label: "完成", color: "#059669" },
+];
+
+const SPRINT_STATUS_LABEL: Record<TaskStatus, string> = {
+  backlog: "Backlog",
+  todo: "待辦",
+  in_progress: "進行中",
+  review: "審核",
+  done: "完成",
+};
+
+export type SprintDigestTask = {
+  id: string;
+  title: string;
+  projectName: string;
+  status: TaskStatus;
+  dueDate?: string;
+};
+
+function truncateFlexText(text: string, max: number): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+function buildSprintTaskBubble(task: SprintDigestTask) {
+  const statusLabel = SPRINT_STATUS_LABEL[task.status] ?? task.status;
+  const buttons = SPRINT_STATUS_BUTTONS.filter((b) => b.value !== task.status).map((b) => ({
+    type: "button" as const,
+    style: (b.value === "done" ? "primary" : "secondary") as "primary" | "secondary",
+    height: "sm" as const,
+    color: b.value === "done" ? b.color : undefined,
+    action: {
+      type: "message" as const,
+      label: b.label,
+      text: `任務狀態 ${task.id} ${b.value}`,
+    },
+  }));
+
+  const bodyContents: Record<string, unknown>[] = [
+    {
+      type: "text",
+      text: truncateFlexText(task.title, 60),
+      weight: "bold",
+      size: "md",
+      wrap: true,
+      color: "#0f172a",
+    },
+    {
+      type: "text",
+      text: truncateFlexText(task.projectName, 40),
+      size: "xs",
+      color: "#64748b",
+      margin: "sm",
+      wrap: true,
+    },
+    {
+      type: "text",
+      text: `目前：${statusLabel}`,
+      size: "sm",
+      color: "#2563eb",
+      margin: "md",
+      weight: "bold",
+    },
+  ];
+
+  if (task.dueDate) {
+    bodyContents.push({
+      type: "text",
+      text: `到期 ${task.dueDate}`,
+      size: "xs",
+      color: "#94a3b8",
+      margin: "sm",
+    });
+  }
+
+  return {
+    type: "bubble" as const,
+    size: "kilo" as const,
+    body: {
+      type: "box" as const,
+      layout: "vertical" as const,
+      contents: bodyContents,
+    },
+    footer: {
+      type: "box" as const,
+      layout: "vertical" as const,
+      spacing: "sm" as const,
+      contents: buttons,
+    },
+  };
+}
+
+/** 本週 Sprint 指派任務 Carousel（一鍵改狀態） */
+export function buildSprintTasksCarousel(input: {
+  employeeName: string;
+  sprintLabel: string;
+  tasks: SprintDigestTask[];
+  kind: "in" | "out";
+}): LineMessage {
+  const altText =
+    input.kind === "in" ? "本週 Sprint · 你的任務" : "本週 Sprint · 收斂進度";
+  const headerHint =
+    input.kind === "in"
+      ? `${input.employeeName}，以下是你在 ${input.sprintLabel} 的未完成任務`
+      : `${input.employeeName}，下班前可更新 ${input.sprintLabel} 任務進度`;
+
+  const bubbles = input.tasks.slice(0, 10).map(buildSprintTaskBubble);
+
+  // 第一張加總覽說明（若只有 1 張任務，把說明塞進該 bubble body 頂部）
+  if (bubbles.length === 1) {
+    const only = bubbles[0];
+    only.body.contents = [
+      {
+        type: "text",
+        text: altText,
+        size: "xs",
+        color: "#94a3b8",
+        weight: "bold",
+      },
+      {
+        type: "text",
+        text: headerHint,
+        size: "xs",
+        color: "#64748b",
+        wrap: true,
+        margin: "sm",
+      },
+      { type: "separator", margin: "md" },
+      ...only.body.contents,
+    ];
+    return {
+      type: "flex",
+      altText,
+      contents: only,
+    };
+  }
+
+  const introBubble = {
+    type: "bubble" as const,
+    size: "kilo" as const,
+    body: {
+      type: "box" as const,
+      layout: "vertical" as const,
+      contents: [
+        {
+          type: "text",
+          text: altText,
+          weight: "bold",
+          size: "lg",
+          color: "#2563eb",
+        },
+        {
+          type: "text",
+          text: headerHint,
+          wrap: true,
+          size: "sm",
+          color: "#64748b",
+          margin: "md",
+        },
+        {
+          type: "text",
+          text: `共 ${input.tasks.length} 項，左右滑動查看；點按鈕即可改狀態`,
+          size: "xs",
+          color: "#94a3b8",
+          margin: "md",
+          wrap: true,
+        },
+      ],
+    },
+    footer: {
+      type: "box" as const,
+      layout: "vertical" as const,
+      contents: [siteButton("開啟 Sprint", "/sprints")],
+    },
+  };
+
+  // carousel 最多 12 bubbles；intro + 最多 10 任務 = 11
+  return {
+    type: "flex",
+    altText,
+    contents: {
+      type: "carousel",
+      contents: [introBubble, ...bubbles],
+    },
+  };
+}
+
+/** 任務狀態更新結果 */
+export function buildTaskStatusResultFlex(input: {
+  title: string;
+  projectName: string;
+  status: TaskStatus;
+}): LineMessage {
+  const statusLabel = SPRINT_STATUS_LABEL[input.status] ?? input.status;
+  return {
+    type: "flex",
+    altText: `已更新：${statusLabel}`,
+    contents: {
+      type: "bubble",
+      size: "kilo",
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          {
+            type: "text",
+            text: "任務狀態已更新",
+            weight: "bold",
+            size: "lg",
+            color: "#059669",
+          },
+          {
+            type: "text",
+            text: truncateFlexText(input.title, 60),
+            wrap: true,
+            size: "md",
+            margin: "md",
+            color: "#0f172a",
+          },
+          {
+            type: "text",
+            text: truncateFlexText(input.projectName, 40),
+            size: "xs",
+            color: "#64748b",
+            margin: "sm",
+          },
+          {
+            type: "text",
+            text: `→ ${statusLabel}`,
+            weight: "bold",
+            size: "sm",
+            color: "#2563eb",
+            margin: "lg",
+          },
+        ],
+      },
+      footer: {
+        type: "box",
+        layout: "vertical",
+        contents: [siteButton("開啟 Sprint", "/sprints")],
       },
     },
   };
