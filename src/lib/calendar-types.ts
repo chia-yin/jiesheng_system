@@ -29,6 +29,7 @@ export const EVENT_TYPE_LABEL: Record<CalendarEventType, string> = {
   trip: "[出差]",
   project: "[專案]",
   sprint: "[迭代]",
+  holiday: "[假日]",
   other: "[其他]",
 };
 
@@ -63,6 +64,7 @@ export function normalizeEventType(type: string): CalendarEventType {
     "trip",
     "project",
     "sprint",
+    "holiday",
     "other",
   ];
   if (allowed.includes(type as CalendarEventType)) return type as CalendarEventType;

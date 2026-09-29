@@ -118,6 +118,7 @@ export type CalendarEventType =
   | "trip"
   | "project"
   | "sprint"
+  | "holiday"
   | "other";
 
 
@@ -138,7 +139,7 @@ export interface CalendarEvent {
 }
 
 export interface AggregatedCalendarEvent extends CalendarEvent {
-  source: "stored" | "leave" | "project" | "sprint";
+  source: "stored" | "leave" | "project" | "sprint" | "holiday" | "company_calendar";
   employeeName?: string;
   projectName?: string;
   sprintId?: string;

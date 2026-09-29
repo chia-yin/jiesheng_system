@@ -1,6 +1,7 @@
 import { getStore, newId, saveStore } from "@/lib/db";
 import { formatLeaveTitle } from "@/lib/calendar-types";
 import { formatSprintDisplay } from "@/lib/project-ui";
+import { listTaiwanHolidays } from "@/lib/taiwan-holidays";
 import type { CalendarEvent, CalendarEventType, AggregatedCalendarEvent } from "@/types/system";
 
 export { WEEKDAYS, getMonthGrid, toDateStr, parseMonthKey } from "@/lib/calendar-grid";
@@ -143,6 +144,51 @@ export async function getAggregatedEvents(month?: string): Promise<AggregatedCal
 
   for (const event of store.calendarEvents) {
     events.push({ ...event, source: "stored" });
+  }
+
+  // 內建台灣國定假日／補假（唯讀，供排程討論）
+  const taiwanList = listTaiwanHolidays();
+  const taiwanDates = new Set(taiwanList.map((h) => h.date));
+  for (const h of taiwanList) {
+    events.push({
+      id: `tw-holiday-${h.date}`,
+      title: h.name,
+      type: "holiday",
+      startDate: h.date,
+      endDate: h.date,
+      description: "依行政院人事行政總處辦公日曆（內建）",
+      createdAt: `${h.date}T00:00:00.000Z`,
+      source: "holiday",
+    });
+  }
+
+  // 公司自訂放假／補班覆寫（與打卡提醒同一套設定）
+  for (const day of store.workSettings?.companyCalendarDays ?? []) {
+    if (day.kind === "holiday") {
+      // 與國定假日同日時略過，避免格子重複
+      if (taiwanDates.has(day.date)) continue;
+      events.push({
+        id: `company-cal-${day.date}`,
+        title: day.name || "公司放假",
+        type: "holiday",
+        startDate: day.date,
+        endDate: day.date,
+        description: "公司休假日設定（覆寫）",
+        createdAt: `${day.date}T00:00:00.000Z`,
+        source: "company_calendar",
+      });
+    } else {
+      events.push({
+        id: `company-cal-${day.date}`,
+        title: day.name?.startsWith("補班") ? day.name : `補班 · ${day.name || "公司補班"}`,
+        type: "company_event",
+        startDate: day.date,
+        endDate: day.date,
+        description: "公司補班日（覆寫；當日仍會打卡提醒）",
+        createdAt: `${day.date}T00:00:00.000Z`,
+        source: "company_calendar",
+      });
+    }
   }
 
   if (!month) return events;

@@ -89,6 +89,11 @@ const TYPE_CONFIG: Record<
     chip: "bg-violet-50 text-violet-700 border-violet-200/60",
     dot: "bg-violet-500",
   },
+  holiday: {
+    label: EVENT_TYPE_LABEL.holiday,
+    chip: "bg-red-50 text-red-700 border-red-200/60",
+    dot: "bg-red-500",
+  },
   other: {
     label: EVENT_TYPE_LABEL.other,
     chip: "bg-slate-50 text-slate-600 border-slate-200/60",
@@ -902,7 +907,11 @@ function CalendarPage() {
                   ? "來源：請假系統（已核准）"
                   : selectedEvent.source === "sprint"
                     ? "來源：本週 Sprint"
-                    : "來源：專案管理"}
+                    : selectedEvent.source === "holiday"
+                      ? "來源：內建國定假日（人事總處辦公日曆）"
+                      : selectedEvent.source === "company_calendar"
+                        ? "來源：公司休假日設定（可於管理 → 休假日設定調整）"
+                        : "來源：專案管理"}
               </p>
             )}
             {selectedEvent.source === "stored" && (
