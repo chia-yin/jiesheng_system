@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Calendar, CheckCircle2, Link2, MessageCircle, Plug } from "lucide-react";
+import { Calendar, CheckCircle2, GitBranch, Link2, MessageCircle, Plug } from "lucide-react";
 
 interface IntegrationState {
   line: {
@@ -14,6 +14,10 @@ interface IntegrationState {
     connected: boolean;
     calendarId: string;
     connectedAt: string | null;
+  };
+  gitlab: {
+    configured: boolean;
+    baseUrl: string;
   };
 }
 
@@ -103,7 +107,7 @@ export default function AdminIntegrationsPage() {
           <Plug className="h-5 w-5 text-[var(--primary)]" />
           整合設定
         </h2>
-        <p className="mt-1 text-sm text-[var(--muted)]">LINE 圖文選單與 Google 日曆同步目標</p>
+        <p className="mt-1 text-sm text-[var(--muted)]">LINE、Google 日曆與 GitLab 分支監控</p>
       </header>
 
       <form onSubmit={handleSave} className="card space-y-6 p-6">
@@ -178,6 +182,37 @@ export default function AdminIntegrationsPage() {
           )}
         </section>
 
+        <hr className="border-[var(--line)]" />
+
+        <section>
+          <h3 className="flex items-center gap-2 text-base font-bold text-[var(--ink)]">
+            <GitBranch className="h-4 w-4 text-[var(--primary)]" />
+            GitLab 分支監控
+          </h3>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            於 Netlify 設定環境變數後，「專案 → Git 狀態」可查詢各專案 paths 內的 GitLab
+            倉庫分支樹。API 本身不額外收費，僅受速率限制。
+          </p>
+          <div className="mt-3 space-y-1 text-xs text-[var(--muted)]">
+            <p>
+              Token：
+              {data?.gitlab.configured ? (
+                <span className="text-[var(--success-l)]">已設定</span>
+              ) : (
+                <span className="text-[var(--danger)]">未設定</span>
+              )}
+            </p>
+            <p>
+              Base URL：
+              <code className="rounded bg-slate-50 px-1 font-mono">{data?.gitlab.baseUrl ?? "https://gitlab.com"}</code>
+            </p>
+            <p className="text-[var(--faint)]">
+              變數：<code className="rounded bg-slate-50 px-1">GITLAB_TOKEN</code>（read_api）、
+              選用 <code className="rounded bg-slate-50 px-1">GITLAB_BASE_URL</code>
+            </p>
+          </div>
+        </section>
+
         {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
         {message && (
           <p className="flex items-center gap-1 text-sm text-[var(--success-l)]">
@@ -211,6 +246,9 @@ export default function AdminIntegrationsPage() {
           </li>
           <li>OAuth 連結帳號需對指定日曆有「建立事件」權限</li>
           <li>儲存日曆 ID 後會自動同步；亦可至行事曆頁手動再同步</li>
+          <li>
+            GitLab Token 請用 Personal / Project Access Token（read_api），設於 Netlify 環境變數後重新部署
+          </li>
         </ul>
       </div>
     </div>

@@ -12,7 +12,9 @@ import {
   ClipboardList,
   Clock,
   FolderKanban,
+  GitBranch,
   LayoutDashboard,
+  ListTodo,
   Megaphone,
   Menu,
   Plug,
@@ -52,7 +54,9 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "專案",
     items: [
       { href: "/projects", label: "專案管理", icon: FolderKanban },
+      { href: "/tasks", label: "任務總覽", icon: ListTodo },
       { href: "/sprints", label: "本週 Sprint", icon: Rocket },
+      { href: "/repos", label: "Git 狀態", icon: GitBranch },
     ],
   },
   {

@@ -31,6 +31,8 @@
 - [x] Supabase Auth 雙通道登入（階段 3，選用）
 - [x] 打卡提醒：國定假日＋公司休假／補班覆寫
 - [x] LINE 上下班提醒附帶本週 Sprint 任務（可一鍵改狀態）
+- [x] 任務總覽（全公司未完成任務篩選）
+- [x] GitLab 分支樹監控（paths URL + GITLAB_TOKEN）
 
 ## 待完成
 
@@ -102,6 +104,8 @@ npm run sync:supabase-auth # 員工同步至 Supabase Auth
 | PATCH/DELETE | `/api/projects/[id]/sprints/[sprintId]` | Sprint 編輯刪除（admin） |
 | GET/POST | `/api/projects/[id]/tasks` | 任務列表（全員）/ 新增（admin） |
 | PATCH/DELETE | `/api/projects/[id]/tasks/[taskId]` | 任務更新（admin 或 assignee）/ 刪除（admin 或 assignee） |
+| GET | `/api/tasks` | 全公司未完成任務總覽 |
+| GET | `/api/gitlab/status` | 各專案 GitLab 分支健康度 |
 | GET/POST/PATCH/DELETE | `/api/calendar` | 行事曆事件 CRUD |
 | GET | `/api/calendar/export.ics` | iCal 匯出/訂閱 |
 | GET | `/api/calendar/google-status` | Google 連結狀態 |

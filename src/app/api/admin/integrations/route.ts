@@ -6,6 +6,7 @@ import {
   isGoogleOAuthConfigured,
   syncCompanyCalendarToGoogle,
 } from "@/lib/google-calendar";
+import { getGitLabBaseUrl, isGitLabConfigured } from "@/lib/gitlab";
 import { isLineEnabled } from "@/lib/line";
 import { resolveLineRichMenuId } from "@/lib/line-rich-menu";
 
@@ -30,6 +31,10 @@ export async function GET() {
         connected: await isGoogleConnected(),
         calendarId: resolveCalendarId(store),
         connectedAt: store.googleTokens?.connectedAt ?? null,
+      },
+      gitlab: {
+        configured: isGitLabConfigured(),
+        baseUrl: getGitLabBaseUrl(),
       },
     });
   } catch (error) {

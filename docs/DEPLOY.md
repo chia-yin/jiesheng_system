@@ -49,6 +49,8 @@ npm run migrate:supabase
 | `SESSION_SECRET` | 隨機長字串（session 簽章） |
 | `CRON_SECRET` | 打卡提醒排程用（隨機長字串） |
 | `GEMINI_API_KEY` | Sprint「快速建立」AI 解析（選用） |
+| `GITLAB_TOKEN` | Git 狀態頁查詢分支（`read_api`，選用） |
+| `GITLAB_BASE_URL` | 預設 `https://gitlab.com`，自架可改 |
 | `GOOGLE_*` | 若需 Google 行事曆同步 |
 
 4. 部署完成後，以預設帳號登入測試（admin / admin123）
