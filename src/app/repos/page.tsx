@@ -208,7 +208,17 @@ export default function ReposPage() {
     setError("");
     try {
       const res = await fetch("/api/gitlab/status", { cache: "no-store" });
-      const json = await res.json();
+      const text = await res.text();
+      let json: StatusPayload & { error?: string };
+      try {
+        json = JSON.parse(text) as StatusPayload & { error?: string };
+      } catch {
+        throw new Error(
+          res.ok
+            ? "伺服器回傳格式錯誤"
+            : `查詢失敗（HTTP ${res.status}），可能逾時，請稍後再重新整理`
+        );
+      }
       if (!res.ok) throw new Error(json.error ?? "載入失敗");
       setData(json);
     } catch (err) {
@@ -287,11 +297,18 @@ export default function ReposPage() {
         </div>
       )}
 
-      {error && <p className="text-sm text-[var(--danger)]">{error}</p>}
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          {error}
+          <button type="button" className="ml-3 underline" onClick={load}>
+            重試
+          </button>
+        </div>
+      )}
 
       {loading && !data ? (
         <p className="py-16 text-center text-sm text-[var(--muted)]">查詢 GitLab 中…</p>
-      ) : (
+      ) : data ? (
         <>
           {projectGroups.length === 0 ? (
             <p className="card p-6 text-sm text-[var(--faint)]">
@@ -368,14 +385,14 @@ export default function ReposPage() {
             </div>
           )}
 
-          {data?.fetchedAt && (
+          {data.fetchedAt && (
             <p className="text-center text-[11px] text-[var(--faint)]">
               更新於 {new Date(data.fetchedAt).toLocaleString("zh-TW", { hour12: false })} · 快取約 5
               分鐘
             </p>
           )}
         </>
-      )}
+      ) : null}
 
       <Modal
         open={Boolean(cleanupRepo)}

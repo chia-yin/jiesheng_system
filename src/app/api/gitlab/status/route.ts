@@ -3,6 +3,9 @@ import { getSession } from "@/lib/auth";
 import { getStore } from "@/lib/db";
 import { collectAllGitLabStatuses, getGitLabBaseUrl, isGitLabConfigured } from "@/lib/gitlab";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 export async function GET() {
   try {
     const session = await getSession();
@@ -21,6 +24,7 @@ export async function GET() {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "讀取失敗";
+    console.error("[gitlab/status]", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

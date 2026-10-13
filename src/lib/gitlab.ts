@@ -69,12 +69,40 @@ async function gitlabFetch<T>(apiPath: string): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (token) headers["PRIVATE-TOKEN"] = token;
 
-  const res = await fetch(url, { headers, next: { revalidate: 0 } });
-  if (!res.ok) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const res = await fetch(url, {
+      headers,
+      cache: "no-store",
+      signal: controller.signal,
+    });
     const text = await res.text();
-    throw new Error(`GitLab API ${res.status}: ${text.slice(0, 180)}`);
+    if (!res.ok) {
+      throw new Error(`GitLab API ${res.status}: ${text.slice(0, 160)}`);
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new Error("GitLab 回傳非 JSON（可能 token 無效或網址錯誤）");
+    }
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json() as Promise<T>;
+}
+
+async function mapPool<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 interface RawBranch {
@@ -206,7 +234,7 @@ export async function fetchGitLabRepoStatus(
     const defaultBranch = rawBranches.find((b) => b.default)?.name ?? "main";
 
     const unmerged = rawBranches.filter((b) => !b.default && !b.merged);
-    // 限制 compare 呼叫數量
+    // 限制 compare 呼叫，避免 Netlify function 逾時回 HTML
     const compareTargets = unmerged
       .slice()
       .sort((a, b) => {
@@ -214,15 +242,14 @@ export async function fetchGitLabRepoStatus(
         const db = b.commit?.committed_date ?? b.commit?.created_at ?? "";
         return db.localeCompare(da);
       })
-      .slice(0, 15);
+      .slice(0, 6);
 
     const compareMap = new Map<string, { ahead: number; behind: number }>();
-    await Promise.all(
-      compareTargets.map(async (b) => {
-        const counts = await fetchCompareCounts(projectIdEnc, defaultBranch, b.name);
-        compareMap.set(b.name, counts);
-      })
-    );
+    await mapPool(compareTargets, 2, async (b) => {
+      const counts = await fetchCompareCounts(projectIdEnc, defaultBranch, b.name);
+      compareMap.set(b.name, counts);
+      return counts;
+    });
 
     const mapped: GitLabBranchInfo[] = rawBranches.map((b) => {
       const commitDate = b.commit?.committed_date ?? b.commit?.created_at ?? null;
@@ -297,17 +324,17 @@ export async function fetchGitLabRepoStatus(
 }
 
 export async function collectAllGitLabStatuses(projects: Project[]): Promise<GitLabRepoStatus[]> {
-  const results: GitLabRepoStatus[] = [];
   const active = projects.filter((p) => p.status === "active" || p.status === "planning");
+  const jobs: Array<{ project: Project; path: ProjectPath }> = [];
 
   for (const project of active) {
-    const paths = project.paths?.length ? project.paths : [];
-    if (paths.length === 0) continue;
-    for (const path of paths) {
+    for (const path of project.paths ?? []) {
       if (!path.url?.trim()) continue;
-      results.push(await fetchGitLabRepoStatus(project, path));
+      jobs.push({ project, path });
     }
   }
 
-  return results;
+  // 最多先查 12 個路徑，並行 2，避免 function 逾時
+  const limited = jobs.slice(0, 12);
+  return mapPool(limited, 2, ({ project, path }) => fetchGitLabRepoStatus(project, path));
 }
