@@ -529,12 +529,31 @@ function CalendarPage() {
     setSyncing(true);
     try {
       const res = await fetch("/api/calendar/sync", { method: "POST" });
-      const data = await res.json();
+      const text = await res.text();
+      let data: {
+        error?: string;
+        synced?: number;
+        remaining?: number;
+        errors?: string[];
+      };
+      try {
+        data = JSON.parse(text) as typeof data;
+      } catch {
+        throw new Error(
+          res.ok
+            ? "伺服器回傳格式錯誤"
+            : "同步逾時，請再按一次「同步 Google」繼續未完成項目"
+        );
+      }
       if (!res.ok) throw new Error(data.error ?? "同步失敗");
-      if (data.errors?.length) {
-        showToast(`同步 ${data.synced} 筆；${data.errors.length} 筆失敗`);
+      const remaining = data.remaining ?? 0;
+      const failCount = (data.errors ?? []).filter((e) => !e.includes("請再按一次")).length;
+      if (remaining > 0) {
+        showToast(`已同步 ${data.synced ?? 0} 筆，尚餘 ${remaining} 筆請再按一次`);
+      } else if (failCount) {
+        showToast(`同步 ${data.synced ?? 0} 筆；${failCount} 筆失敗`);
       } else {
-        showToast(`已同步 ${data.synced} 筆至 Google 日曆（請假／會議等）`);
+        showToast(`已同步 ${data.synced ?? 0} 筆至 Google 日曆（請假／會議等）`);
       }
       await loadEvents();
     } catch (error) {

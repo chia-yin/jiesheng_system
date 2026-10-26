@@ -229,30 +229,43 @@ export async function createGoogleCalendarEvent(
   return postGoogleEvent(buildLeaveEventPayload(leave), accessToken, calendarId);
 }
 
+async function upsertPayload(
+  existingId: string | undefined,
+  payload: GoogleEventPayload,
+  accessToken: string,
+  calendarId: string
+): Promise<string> {
+  if (existingId) {
+    try {
+      await patchGoogleEvent(existingId, payload, accessToken, calendarId);
+      return existingId;
+    } catch {
+      // 遠端已刪則改新建
+    }
+  }
+  return postGoogleEvent(payload, accessToken, calendarId);
+}
+
 export async function syncLeaveToGoogle(leave: LeaveRequest): Promise<string | null> {
   if (leave.status !== "approved") return null;
   if (!(await isGoogleConnected())) return null;
 
   const accessToken = await getValidAccessToken();
   const calendarId = await resolveCalendarId();
-  const payload = buildLeaveEventPayload(leave);
-
   const store = await getStore();
   const stored = store.leaves.find((l) => l.id === leave.id);
   if (!stored) return null;
 
-  if (stored.googleEventId) {
-    try {
-      await patchGoogleEvent(stored.googleEventId, payload, accessToken, calendarId);
-      return stored.googleEventId;
-    } catch {
-      // 遠端已刪則改新建
-    }
+  const eventId = await upsertPayload(
+    stored.googleEventId,
+    buildLeaveEventPayload(stored),
+    accessToken,
+    calendarId
+  );
+  if (stored.googleEventId !== eventId) {
+    stored.googleEventId = eventId;
+    await saveStore(store);
   }
-
-  const eventId = await postGoogleEvent(payload, accessToken, calendarId);
-  stored.googleEventId = eventId;
-  await saveStore(store);
   return eventId;
 }
 
@@ -262,30 +275,29 @@ export async function syncCalendarEventToGoogle(event: CalendarEvent): Promise<s
 
   const accessToken = await getValidAccessToken();
   const calendarId = await resolveCalendarId();
-  const payload = buildCalendarEventPayload(event);
-
   const store = await getStore();
   const stored = store.calendarEvents.find((e) => e.id === event.id);
   if (!stored) return null;
 
-  if (stored.googleEventId) {
-    try {
-      await patchGoogleEvent(stored.googleEventId, payload, accessToken, calendarId);
-      return stored.googleEventId;
-    } catch {
-      // 若遠端已刪，改為新建
-    }
+  const eventId = await upsertPayload(
+    stored.googleEventId,
+    buildCalendarEventPayload(stored),
+    accessToken,
+    calendarId
+  );
+  if (stored.googleEventId !== eventId) {
+    stored.googleEventId = eventId;
+    await saveStore(store);
   }
-
-  const eventId = await postGoogleEvent(payload, accessToken, calendarId);
-  stored.googleEventId = eventId;
-  await saveStore(store);
   return eventId;
 }
+
+const BULK_SYNC_BUDGET_MS = 18_000;
 
 export async function syncCompanyCalendarToGoogle(): Promise<{
   synced: number;
   skipped: number;
+  remaining: number;
   errors: string[];
 }> {
   const store = await getStore();
@@ -294,18 +306,41 @@ export async function syncCompanyCalendarToGoogle(): Promise<{
   const errors: string[] = [];
 
   if (!(await isGoogleConnected())) {
-    return { synced: 0, skipped: 0, errors: ["尚未連結 Google 日曆"] };
+    return { synced: 0, skipped: 0, remaining: 0, errors: ["尚未連結 Google 日曆"] };
   }
 
-  for (const leave of store.leaves) {
-    if (leave.status !== "approved") continue;
+  const accessToken = await getValidAccessToken();
+  const calendarId = await resolveCalendarId();
+  const started = Date.now();
+  let dirty = false;
+  let remaining = 0;
+  let timedOut = false;
+
+  const pendingLeaves = store.leaves.filter((l) => l.status === "approved" && !l.googleEventId);
+  const updateLeaves = store.leaves.filter((l) => l.status === "approved" && Boolean(l.googleEventId));
+  const pendingEvents = store.calendarEvents.filter(
+    (e) => isGoogleSyncableEventType(e.type) && !e.googleEventId
+  );
+  const updateEvents = store.calendarEvents.filter(
+    (e) => isGoogleSyncableEventType(e.type) && Boolean(e.googleEventId)
+  );
+  skipped += store.calendarEvents.filter((e) => !isGoogleSyncableEventType(e.type)).length;
+
+  async function withinBudget() {
+    if (Date.now() - started > BULK_SYNC_BUDGET_MS) {
+      timedOut = true;
+      return false;
+    }
+    return true;
+  }
+
+  for (const leave of pendingLeaves) {
+    if (!(await withinBudget())) break;
     try {
-      const hadId = Boolean(leave.googleEventId);
-      const eventId = await syncLeaveToGoogle(leave);
-      if (eventId) {
-        if (hadId) skipped++;
-        else synced++;
-      } else skipped++;
+      const eventId = await upsertPayload(undefined, buildLeaveEventPayload(leave), accessToken, calendarId);
+      leave.googleEventId = eventId;
+      dirty = true;
+      synced++;
     } catch (error) {
       const message = error instanceof Error ? error.message : "同步失敗";
       console.error("[google-calendar] sync leave failed:", message);
@@ -313,18 +348,13 @@ export async function syncCompanyCalendarToGoogle(): Promise<{
     }
   }
 
-  for (const event of store.calendarEvents) {
-    if (!isGoogleSyncableEventType(event.type)) {
-      skipped++;
-      continue;
-    }
+  for (const event of pendingEvents) {
+    if (!(await withinBudget())) break;
     try {
-      const hadId = Boolean(event.googleEventId);
-      const eventId = await syncCalendarEventToGoogle(event);
-      if (eventId) {
-        if (hadId) skipped++;
-        else synced++;
-      } else skipped++;
+      const eventId = await upsertPayload(undefined, buildCalendarEventPayload(event), accessToken, calendarId);
+      event.googleEventId = eventId;
+      dirty = true;
+      synced++;
     } catch (error) {
       const message = error instanceof Error ? error.message : "同步失敗";
       console.error("[google-calendar] sync event failed:", message);
@@ -332,7 +362,62 @@ export async function syncCompanyCalendarToGoogle(): Promise<{
     }
   }
 
-  return { synced, skipped, errors };
+  // 已有 Google 事件 ID 的項目改走 PATCH，讓編輯後的標題／時間寫回日曆
+  for (const leave of updateLeaves) {
+    if (!(await withinBudget())) break;
+    try {
+      const eventId = await upsertPayload(
+        leave.googleEventId,
+        buildLeaveEventPayload(leave),
+        accessToken,
+        calendarId
+      );
+      if (leave.googleEventId !== eventId) {
+        leave.googleEventId = eventId;
+        dirty = true;
+      }
+      synced++;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "同步失敗";
+      console.error("[google-calendar] update leave failed:", message);
+      errors.push(`請假 ${leave.employeeName} (${leave.startDate}): ${message}`);
+    }
+  }
+
+  for (const event of updateEvents) {
+    if (!(await withinBudget())) break;
+    try {
+      const eventId = await upsertPayload(
+        event.googleEventId,
+        buildCalendarEventPayload(event),
+        accessToken,
+        calendarId
+      );
+      if (event.googleEventId !== eventId) {
+        event.googleEventId = eventId;
+        dirty = true;
+      }
+      synced++;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "同步失敗";
+      console.error("[google-calendar] update event failed:", message);
+      errors.push(`事件 ${event.title} (${event.startDate}): ${message}`);
+    }
+  }
+
+  remaining =
+    pendingLeaves.filter((l) => !l.googleEventId).length +
+    pendingEvents.filter((e) => !e.googleEventId).length;
+
+  if (timedOut && remaining > 0) {
+    errors.unshift(`同步時間較長，已先寫入 ${synced} 筆，尚餘 ${remaining} 筆請再按一次「同步 Google」`);
+  }
+
+  if (dirty) {
+    await saveStore(store);
+  }
+
+  return { synced, skipped, remaining, errors };
 }
 
 /** 相容舊名稱 */

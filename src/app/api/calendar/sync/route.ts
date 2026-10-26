@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { isGoogleConnected, isGoogleOAuthConfigured, syncCompanyCalendarToGoogle } from "@/lib/google-calendar";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 26;
+
 export async function POST() {
   try {
     await requireAdmin();
