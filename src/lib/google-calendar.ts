@@ -97,6 +97,30 @@ function addDays(dateStr: string, days: number): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** Google 不接受 start === end（timeRangeEmpty）。無結束時間時預設 +1 小時。 */
+function timedEnd(startDate: string, startTime: string, endDate?: string, endTime?: string): {
+  date: string;
+  time: string;
+} {
+  const date = endDate || startDate;
+  const time = endTime || startTime;
+  const startMs = new Date(`${startDate}T${startTime}:00`).getTime();
+  const endMs = new Date(`${date}T${time}:00`).getTime();
+  if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs > startMs) {
+    return { date, time };
+  }
+  const bumped = new Date(`${startDate}T${startTime}:00`);
+  bumped.setHours(bumped.getHours() + 1);
+  return {
+    date: `${bumped.getFullYear()}-${pad2(bumped.getMonth() + 1)}-${pad2(bumped.getDate())}`,
+    time: `${pad2(bumped.getHours())}:${pad2(bumped.getMinutes())}`,
+  };
+}
+
 async function resolveCalendarId(): Promise<string> {
   const store = await getStore();
   const tokens = await getGoogleTokens();
@@ -136,13 +160,12 @@ export function buildCalendarEventPayload(event: CalendarEvent): GoogleEventPayl
   const timeZone = "Asia/Taipei";
 
   if (event.startTime) {
-    const endTime = event.endTime || event.startTime;
-    const endDate = event.endDate ?? event.startDate;
+    const end = timedEnd(event.startDate, event.startTime, event.endDate, event.endTime);
     return {
       summary,
       description,
       start: { dateTime: `${event.startDate}T${event.startTime}:00`, timeZone },
-      end: { dateTime: `${endDate}T${endTime}:00`, timeZone },
+      end: { dateTime: `${end.date}T${end.time}:00`, timeZone },
       colorId:
         event.type === "meeting_external"
           ? "9"
