@@ -502,7 +502,11 @@ function CalendarPage() {
 
       closeModal();
       await loadEvents();
-      showToast(editingId ? "事件已更新" : "事件已新增");
+      if (data.event?.googleSyncError) {
+        showToast("已存檔，但 Google 日曆未更新，請按「同步 Google」");
+      } else {
+        showToast(editingId ? "事件已更新" : "事件已新增");
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "儲存失敗");
     } finally {

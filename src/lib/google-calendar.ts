@@ -197,7 +197,7 @@ async function postGoogleEvent(
   return data.id;
 }
 
-async function patchGoogleEvent(
+async function putGoogleEvent(
   googleEventId: string,
   payload: GoogleEventPayload,
   accessToken: string,
@@ -206,7 +206,7 @@ async function patchGoogleEvent(
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
     {
-      method: "PATCH",
+      method: "PUT",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
@@ -217,6 +217,24 @@ async function patchGoogleEvent(
   if (!res.ok) {
     const err = await res.text();
     throw new Error(`更新 Google 日曆事件失敗：${err}`);
+  }
+}
+
+async function deleteGoogleEvent(
+  googleEventId: string,
+  accessToken: string,
+  calendarId: string
+): Promise<void> {
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(googleEventId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+  if (!res.ok && res.status !== 404 && res.status !== 410) {
+    const err = await res.text();
+    console.error("[google-calendar] delete failed:", err.slice(0, 180));
   }
 }
 
@@ -237,10 +255,16 @@ async function upsertPayload(
 ): Promise<string> {
   if (existingId) {
     try {
-      await patchGoogleEvent(existingId, payload, accessToken, calendarId);
+      await putGoogleEvent(existingId, payload, accessToken, calendarId);
       return existingId;
-    } catch {
-      // 遠端已刪則改新建
+    } catch (error) {
+      console.error(
+        "[google-calendar] PUT failed, recreate:",
+        error instanceof Error ? error.message : error
+      );
+      const createdId = await postGoogleEvent(payload, accessToken, calendarId);
+      await deleteGoogleEvent(existingId, accessToken, calendarId);
+      return createdId;
     }
   }
   return postGoogleEvent(payload, accessToken, calendarId);
@@ -279,9 +303,21 @@ export async function syncCalendarEventToGoogle(event: CalendarEvent): Promise<s
   const stored = store.calendarEvents.find((e) => e.id === event.id);
   if (!stored) return null;
 
+  // 用呼叫端傳入的最新欄位（避免剛存檔又讀回舊標題）
+  const latest: CalendarEvent = {
+    ...stored,
+    title: event.title,
+    type: event.type,
+    startDate: event.startDate,
+    endDate: event.endDate,
+    startTime: event.startTime,
+    endTime: event.endTime,
+    description: event.description,
+  };
+
   const eventId = await upsertPayload(
     stored.googleEventId,
-    buildCalendarEventPayload(stored),
+    buildCalendarEventPayload(latest),
     accessToken,
     calendarId
   );
@@ -321,9 +357,9 @@ export async function syncCompanyCalendarToGoogle(): Promise<{
   const pendingEvents = store.calendarEvents.filter(
     (e) => isGoogleSyncableEventType(e.type) && !e.googleEventId
   );
-  const updateEvents = store.calendarEvents.filter(
-    (e) => isGoogleSyncableEventType(e.type) && Boolean(e.googleEventId)
-  );
+  const updateEvents = store.calendarEvents
+    .filter((e) => isGoogleSyncableEventType(e.type) && Boolean(e.googleEventId))
+    .sort((a, b) => b.startDate.localeCompare(a.startDate) || b.createdAt.localeCompare(a.createdAt));
   skipped += store.calendarEvents.filter((e) => !isGoogleSyncableEventType(e.type)).length;
 
   async function withinBudget() {

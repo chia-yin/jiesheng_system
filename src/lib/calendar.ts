@@ -287,6 +287,10 @@ export async function updateCalendarEvent(
     await syncCalendarEventToGoogle(event);
   } catch (error) {
     console.error("[calendar] auto sync after update failed:", error);
+    const refreshed = (await getStore()).calendarEvents.find((e) => e.id === id);
+    return Object.assign(refreshed ?? event, {
+      googleSyncError: error instanceof Error ? error.message : "Google 日曆未更新",
+    });
   }
 
   const refreshed = (await getStore()).calendarEvents.find((e) => e.id === id);
